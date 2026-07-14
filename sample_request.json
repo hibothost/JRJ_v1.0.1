@@ -1,0 +1,109 @@
+{
+  "project": "PROJECT -- Sample Job -- Page 1 of 1",
+  "date_line": "Date--14/07/2026--Observed By--Sharif--Compiled By--Sharif",
+  "opening": {
+    "backsight1": {
+      "name": "Cm1",
+      "n": 140792.76,
+      "e": 364922.15
+    },
+    "backsight2": {
+      "name": "Cm2",
+      "n": 140778.85,
+      "e": 363970.53
+    },
+    "start": {
+      "name": "Cm3",
+      "n": 141456.32,
+      "e": 363862.81,
+      "is_plot_corner": true
+    }
+  },
+  "closing": {
+    "end": {
+      "name": "cm75",
+      "n": 143571.19,
+      "e": 362131.82,
+      "is_plot_corner": true
+    },
+    "foresight1": {
+      "name": "cm74",
+      "n": 143569.35,
+      "e": 361634.81
+    },
+    "foresight2": {
+      "name": "cm79",
+      "n": 143206.69,
+      "e": 361650.79
+    }
+  },
+  "angle_corrections": {
+    "row9": 0,
+    "row10": 0,
+    "row_close1": 22,
+    "row_close2": 26
+  },
+  "measured_total_distance": 18782.419,
+  "corners": [
+    {
+      "name": "cm51",
+      "n": 143587.19,
+      "e": 362847.18,
+      "is_plot_corner": true
+    },
+    {
+      "name": "cm50",
+      "n": 142845.12,
+      "e": 362889.44,
+      "is_plot_corner": true
+    },
+    {
+      "name": "cm49",
+      "n": 142521.76,
+      "e": 362878.44,
+      "is_plot_corner": true
+    },
+    {
+      "name": "cm47",
+      "n": 142850.73,
+      "e": 363583.93,
+      "is_plot_corner": true
+    },
+    {
+      "name": "cm84",
+      "n": 142871.06,
+      "e": 362486.03,
+      "is_plot_corner": true
+    },
+    {
+      "name": "cm83",
+      "n": 142847.28,
+      "e": 362148.29,
+      "is_plot_corner": true
+    },
+    {
+      "name": "cm82",
+      "n": 142861.1,
+      "e": 361681.52,
+      "is_plot_corner": true
+    },
+    {
+      "name": "cm78",
+      "n": 143194.19,
+      "e": 362131.01,
+      "is_plot_corner": true
+    },
+    {
+      "name": "cm77",
+      "n": 143190.2,
+      "e": 362450.95,
+      "is_plot_corner": true
+    },
+    {
+      "name": "cm76",
+      "n": 143572.32,
+      "e": 362439.45,
+      "is_plot_corner": true
+    }
+  ]
+}

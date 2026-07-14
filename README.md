@@ -1,0 +1,145 @@
+# Traverse Form Generator (Vercel-ready)
+
+Recreates the "Form 10" traverse-computation workbook (TOC's, Job History,
+INDEX, DTM, TRVS, Field notes, ABSTRACT, AREA) as a real `.xlsx` with live
+formulas, for **any number of corner points**.
+
+This layout is structured to deploy directly on Vercel: one Python
+serverless function (`api/index.py`) plus a static frontend (`public/index.html`),
+served from the same domain so there's no CORS to configure.
+
+```
+vercel.json          <- routes /api/* to the function, everything else to /public
+api/
+  index.py            <- Flask app + the whole generation engine, in one file
+  requirements.txt
+public/
+  index.html           <- the data-entry form + live parcel preview
+sample_request.json    <- worked example (real numbers, verified against the original file)
+Traverse_Form_Extension_Guide.docx
+```
+
+## Deploy to Vercel
+
+**Option A -- Vercel CLI (fastest):**
+```bash
+npm i -g vercel      # if you don't have it already
+cd this-project-folder
+vercel                # first deploy, follow the prompts
+vercel --prod          # promote to production
+```
+
+**Option B -- Git-connected project:**
+1. Push this folder to a GitHub/GitLab/Bitbucket repo.
+2. In the Vercel dashboard: **New Project → Import** that repo.
+3. Vercel will read `vercel.json` and build both the function and the
+   static site automatically -- no framework preset or build command needed.
+4. Deploy. Your form is at `https://<your-project>.vercel.app/`, and the
+   API is at `https://<your-project>.vercel.app/api/generate`.
+
+That's it -- `public/index.html` already calls `/api/generate` as a
+relative path, so it works immediately at whatever domain Vercel gives you
+(or a custom domain you attach later). No environment variables needed.
+
+## Why one file for the whole backend
+
+Vercel's Python runtime is most reliable when a function doesn't depend on
+importing sibling modules -- so `api/index.py` contains the entire
+generation engine *and* the Flask routes in a single file, rather than
+importing a separate `traverse_generator.py`. It's the same code as before,
+just consolidated for deployment safety.
+
+## Local development
+
+**With the Vercel CLI (closest to production):**
+```bash
+vercel dev
+```
+This runs the Python function and serves `public/` together, exactly like
+production, at `http://localhost:3000`.
+
+**Or run the Flask app directly (no Vercel CLI needed):**
+```bash
+cd api
+pip install -r requirements.txt
+python index.py                     # serves http://localhost:5000
+```
+Then open `public/index.html` in a browser and change `API_URL` near the
+top of its `<script>` to `"http://localhost:5000"` (it defaults to a
+relative path, which only works when frontend and API share an origin).
+
+## The data model
+
+One JSON object in, one `.xlsx` out. See `sample_request.json` for a full
+real-world example. Quick shape:
+
+```jsonc
+{
+  "opening": {
+    "backsight1": {"name": "Cm1", "n": 140792.76, "e": 364922.15},
+    "backsight2": {"name": "Cm2", "n": 140778.85, "e": 363970.53},
+    "start":      {"name": "Cm3", "n": 141456.32, "e": 363862.81, "is_plot_corner": true}
+  },
+  "closing": {
+    "end":        {"name": "cm75", "n": 143571.19, "e": 362131.82, "is_plot_corner": true},
+    "foresight1": {"name": "cm74", "n": 143569.35, "e": 361634.81},
+    "foresight2": {"name": "cm79", "n": 143206.69, "e": 361650.79}
+  },
+  "angle_corrections": {"row9": 0, "row10": 0, "row_close1": 22, "row_close2": 26},
+  "measured_total_distance": 18782.419,
+  "corners": [
+    {"name": "cm51", "n": 143587.19, "e": 362847.18, "is_plot_corner": true},
+    ...
+  ],
+  "job_meta": {"job_number": "", "client": "", "surveyor": "", "date": "", "description": ""},
+  "index_notes": {"instrument": "Total Station", "district": "", "elevation": 1220, "msl_correction": -0.1911, "scale_factor": -0.3737}
+}
+```
+
+- `opening` / `closing` — the two triangles of known control stations that
+  give the traverse its starting and closing bearings (fixed at 3 + 3
+  stations regardless of corner-point count — see the extension guide for
+  why).
+- `corners` — one entry per traverse station, in walking order, any length
+  ≥ 1. Just name + coordinates — leg distances are computed from the
+  coordinates, not entered.
+- `is_plot_corner` — tag any station (including `start` and `end`) that's
+  an actual parcel boundary corner. Only tagged stations feed ABSTRACT and
+  AREA.
+- `measured_total_distance` — the one figure that genuinely can't be
+  derived from this traverse's own coordinates (verified against the
+  original file: it's roughly 2.4× this polygon's own perimeter, i.e. the
+  total distance for the wider survey job).
+- `job_meta` / `index_notes` — optional; feed the Job History and INDEX
+  sheets.
+
+## What each sheet does
+
+| Sheet | Built from | Notes |
+|---|---|---|
+| **TOC's** | static | Contents list, matching the original's item list. |
+| **Job History** | `job_meta` | Job number / client / surveyor / date / description. |
+| **INDEX** | `index_notes` | Elevation, mean-sea-level correction, scale factor → combined correction → multiplication factor. |
+| **DTM** | `opening`, `closing` | Fixed size (3+3 control stations). |
+| **TRVS** | `corners` | Resizes to `len(corners)`. Bearings, distances, coordinate corrections. |
+| **Field notes** | `TRVS`, `INDEX` | Reverse-derives plausible backsight/foresight field readings from the adjusted TRVS bearings, generalized for any N. See the note in the code's module docstring for the couple of places this deliberately cleans up small inconsistencies in the original example. |
+| **ABSTRACT** | tagged plot corners | Station / Northing / Easting, pulled live from TRVS via formula. |
+| **AREA** | tagged plot corners | Shoelace-formula area & perimeter, polygon closed automatically. |
+
+## Verified
+
+Every TRVS column (bearings, distances, corrections, angular/linear
+misclosure) was diffed against the original file's real job data and
+matches exactly, row for row. The whole 8-sheet output recalculates with
+zero formula errors at 1, 3, 10, and 25 corner points.
+
+## Extending this project
+
+- **Auth / persistence** — stateless right now: one request in, one file
+  out, nothing saved.
+- **Validation** — add schema validation (e.g. `pydantic`) before exposing
+  this beyond local/personal use.
+- **Recalculated cache values** — openpyxl writes formulas without cached
+  results. Excel/Google Sheets/LibreOffice recalculate on open, so this is
+  invisible in normal use; a viewer that doesn't recalculate on open would
+  show blanks until it does.
