@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Traverse Form Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0F2438;
+    --panel:#14314D;
+    --panel-2:#102A42;
+    --grid:#21496C;
+    --line:#2C5478;
+    --text:#EAF2F8;
+    --text-dim:#9FB8CC;
+    --cyan:#6FE7DD;
+    --amber:#F4B860;
+    --danger:#F2765C;
+    --input-bg:#0B1B2B;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      linear-gradient(var(--grid) 1px, transparent 1px) 0 0/28px 28px,
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0/28px 28px,
+      var(--bg);
+    background-attachment:fixed;
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    padding:32px 20px 80px;
+  }
+  .wrap{max-width:1040px;margin:0 auto;}
+  header{margin-bottom:32px;border-bottom:1px solid var(--line);padding-bottom:20px;}
+  h1{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:clamp(28px,4vw,40px);
+    font-weight:700;
+    margin:0 0 6px;
+    letter-spacing:-0.01em;
+  }
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--cyan);
+    margin-bottom:10px;
+  }
+  .sub{color:var(--text-dim);font-size:15px;max-width:640px;line-height:1.5;}
+  section{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:22px 24px;
+    margin-bottom:20px;
+  }
+  h2{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:17px;
+    margin:0 0 4px;
+    display:flex;align-items:center;gap:10px;
+  }
+  h2 .tag{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;color:var(--bg);
+    background:var(--cyan);
+    padding:2px 7px;border-radius:3px;
+    font-weight:600;
+  }
+  .hint{color:var(--text-dim);font-size:13px;margin:0 0 16px;}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+  .grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;}
+  @media (max-width:720px){.grid3{grid-template-columns:1fr;}.grid2{grid-template-columns:1fr;}}
+  label{
+    display:block;font-size:11px;color:var(--text-dim);
+    margin-bottom:5px;font-family:'IBM Plex Mono',monospace;
+    text-transform:uppercase;letter-spacing:.06em;
+  }
+  input[type=text],input[type=number]{
+    width:100%;background:var(--input-bg);border:1px solid var(--line);
+    color:var(--text);padding:9px 10px;border-radius:3px;
+    font-family:'IBM Plex Mono',monospace;font-size:14px;
+  }
+  input:focus{outline:2px solid var(--cyan);outline-offset:1px;border-color:var(--cyan);}
+  .station-block{
+    border:1px solid var(--line);border-radius:3px;padding:14px;
+    background:var(--panel-2);
+  }
+  .station-block .name{font-weight:600;font-size:13px;margin-bottom:10px;color:var(--amber);}
+  .checkbox-row{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:var(--text-dim);}
+  .checkbox-row input{width:auto;}
+  table{width:100%;border-collapse:collapse;margin-top:6px;}
+  th{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;
+    letter-spacing:.05em;color:var(--text-dim);text-align:left;
+    padding:6px 8px;border-bottom:1px solid var(--line);
+  }
+  td{padding:6px 8px;border-bottom:1px solid var(--panel-2);}
+  td input{padding:7px 8px;font-size:13px;}
+  .row-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px;}
+  button{
+    font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;
+    border:1px solid var(--line);background:var(--panel-2);color:var(--text);
+    padding:9px 16px;border-radius:3px;cursor:pointer;transition:.15s;
+  }
+  button:hover{border-color:var(--cyan);color:var(--cyan);}
+  button.remove{color:var(--danger);border-color:transparent;background:transparent;padding:4px 8px;font-size:12px;}
+  button.remove:hover{border-color:var(--danger);}
+  .primary{
+    background:var(--cyan);color:var(--bg);border-color:var(--cyan);
+    font-size:15px;padding:14px 26px;width:100%;
+  }
+  .primary:hover{filter:brightness(1.08);color:var(--bg);}
+  .primary:disabled{opacity:.5;cursor:not-allowed;}
+  .plot-flag{accent-color:var(--amber);}
+  .paste-box{
+    background:var(--panel-2);border:1px dashed var(--line);border-radius:3px;
+    padding:14px;margin-bottom:16px;
+  }
+  textarea{
+    width:100%;min-height:90px;background:var(--input-bg);border:1px solid var(--line);
+    color:var(--text);padding:9px 10px;border-radius:3px;
+    font-family:'IBM Plex Mono',monospace;font-size:13px;resize:vertical;
+    white-space:pre;
+  }
+  textarea:focus{outline:2px solid var(--cyan);outline-offset:1px;border-color:var(--cyan);}
+  .preview-wrap{display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;}
+  #preview{background:var(--input-bg);border:1px solid var(--line);border-radius:4px;}
+  .stats{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--text-dim);line-height:2;}
+  .stats b{color:var(--cyan);font-size:16px;}
+  #status{margin-top:14px;font-family:'IBM Plex Mono',monospace;font-size:13px;min-height:18px;}
+  #status.ok{color:var(--cyan);}
+  #status.err{color:var(--danger);}
+  footer{text-align:center;color:var(--text-dim);font-size:12px;margin-top:40px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Form 10 &middot; Traverse Computation</div>
+    <h1>Traverse Form Generator</h1>
+    <p class="sub">Enter your control stations and corner points, tag the ones that are plot corners, and generate a real .xlsx workbook &mdash; DTM, TRVS, ABSTRACT and AREA sheets, live formulas included, sized to however many points you give it.</p>
+  </header>
+
+  <section>
+    <h2>Project details</h2>
+    <div class="grid2">
+      <div><label>Project line</label><input type="text" id="project" value="PROJECT -------------------- Page 1 of 1"></div>
+      <div><label>Date / observer / compiler line</label><input type="text" id="dateLine" value="Date-------- Observed By-------- Compiled By--------"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Job history <span class="tag">optional</span></h2>
+    <div class="grid3">
+      <div><label>Job number</label><input type="text" id="jobNumber"></div>
+      <div><label>Client</label><input type="text" id="jobClient"></div>
+      <div><label>Surveyor</label><input type="text" id="jobSurveyor"></div>
+      <div><label>Date</label><input type="text" id="jobDate"></div>
+      <div style="grid-column:span 2"><label>Description</label><input type="text" id="jobDescription"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Distance correction (INDEX sheet) <span class="tag">optional</span></h2>
+    <p class="hint">Standard corrections applied to raw field distances to get the final horizontal distances. Defaults are a reasonable placeholder &mdash; edit to match your instrument and site.</p>
+    <div class="grid3">
+      <div><label>Instrument</label><input type="text" id="instrument" value="Total Station"></div>
+      <div><label>District</label><input type="text" id="district" value="District"></div>
+      <div><label>Elevation above sea level (m)</label><input type="number" step="any" id="elevation" value="1220"></div>
+      <div><label>Mean sea level correction</label><input type="number" step="any" id="mslCorrection" value="-0.1911"></div>
+      <div><label>Scale factor</label><input type="number" step="any" id="scaleFactor" value="-0.3737"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Opening control <span class="tag">fixed &middot; 3 stations</span></h2>
+    <p class="hint">Two backsight stations establish the starting bearing; the "start" station is where the traverse itself begins.</p>
+
+    <div class="paste-box">
+      <label>Paste from Excel <span style="text-transform:none;font-weight:400;color:var(--text-dim)">&mdash; exactly 3 rows, in order: Backsight 1, Backsight 2, Start station</span></label>
+      <textarea id="pasteOpening" placeholder="Cm1	140792.76	364922.15
+Cm2	140778.85	363970.53
+Cm3	141456.32	363862.81"></textarea>
+      <div class="row-actions" style="justify-content:flex-start">
+        <button type="button" onclick="parseStationPaste('pasteOpening',[['bs1','Backsight 1'],['bs2','Backsight 2'],['start','Start station']])">+ Fill from paste</button>
+        <button type="button" onclick="document.getElementById('pasteOpening').value=''">Clear box</button>
+      </div>
+    </div>
+
+    <div class="grid3" id="openingBlock"></div>
+  </section>
+
+  <section>
+    <h2>Closing control <span class="tag">fixed &middot; 3 stations</span></h2>
+    <p class="hint">Two foresight stations establish the closing bearing; the "end" station is where the traverse ties in.</p>
+
+    <div class="paste-box">
+      <label>Paste from Excel <span style="text-transform:none;font-weight:400;color:var(--text-dim)">&mdash; exactly 3 rows, in order: End station, Foresight 1, Foresight 2</span></label>
+      <textarea id="pasteClosing" placeholder="Cm75	143571.19	362131.82
+Cm74	143569.35	361634.81
+Cm79	143206.69	361650.79"></textarea>
+      <div class="row-actions" style="justify-content:flex-start">
+        <button type="button" onclick="parseStationPaste('pasteClosing',[['end','End station'],['fs1','Foresight 1'],['fs2','Foresight 2']])">+ Fill from paste</button>
+        <button type="button" onclick="document.getElementById('pasteClosing').value=''">Clear box</button>
+      </div>
+    </div>
+
+    <div class="grid3" id="closingBlock"></div>
+  </section>
+
+  <section>
+    <h2>Corner points <span class="tag" id="cornerCount">0</span></h2>
+    <p class="hint">One row per traverse station, in order. Tick <b style="color:var(--amber)">plot corner</b> for the ones that form the parcel boundary &mdash; those feed the Abstract and Area sheets.</p>
+
+    <div class="paste-box">
+      <label>Paste from Excel <span style="text-transform:none;font-weight:400;color:var(--text-dim)">&mdash; select Stn / Northing / Easting / Plot corner(Y/N) columns in Excel, copy, paste here</span></label>
+      <textarea id="pasteArea" placeholder="cm51	143587.19	362847.18	Y
+cm50	142845.12	362889.44	Y
+cm49	142521.76	362878.44	Y"></textarea>
+      <div class="row-actions" style="justify-content:flex-start">
+        <button type="button" onclick="parsePaste(false)">+ Add pasted rows</button>
+        <button type="button" onclick="parsePaste(true)">&#8635; Replace table with pasted rows</button>
+        <button type="button" onclick="document.getElementById('pasteArea').value=''">Clear box</button>
+      </div>
+      <p class="hint" style="margin:8px 0 0">
+        Columns can be tab-separated (straight from Excel) or comma-separated. Distances are computed automatically from the coordinates &mdash; you don't need to enter them. The plot-corner column is optional (defaults to Y) and accepts Y/N, yes/no, true/false, or 1/0.
+      </p>
+    </div>
+
+    <table>
+      <thead><tr>
+        <th style="width:22%">Station</th><th style="width:22%">Northing</th><th style="width:22%">Easting</th>
+        <th style="width:18%">Plot corner</th><th></th>
+      </tr></thead>
+      <tbody id="cornersBody"></tbody>
+    </table>
+    <div class="row-actions">
+      <button type="button" onclick="addCorner()">+ Add corner point</button>
+      <button type="button" onclick="clearCorners()">Clear all rows</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Angle corrections <span class="tag">optional &middot; default 0</span></h2>
+    <p class="hint">Leave these at 0 unless you have independent angular field observations to reconcile against the coordinates.</p>
+    <div class="grid3">
+      <div><label>Opening angle corr. (row 9)</label><input type="number" step="any" id="e9" value="0"></div>
+      <div><label>Opening angle corr. (row 10)</label><input type="number" step="any" id="e10" value="0"></div>
+      <div><label>Measured total distance</label><input type="number" step="any" id="measuredTotal" value="0"></div>
+      <div><label>Closing angle corr. 1</label><input type="number" step="any" id="eclose1" value="0"></div>
+      <div><label>Closing angle corr. 2</label><input type="number" step="any" id="eclose2" value="0"></div>
+    </div>
+    <p class="hint" style="margin-top:10px">"Measured total distance" is the independently surveyed total length for the wider job (used for the 1-in-X linear misclosure ratio) &mdash; it isn't derived from this traverse's own coordinates, so it still needs to be entered directly.</p>
+  </section>
+
+  <section>
+    <h2>Plot preview <span class="tag">live</span></h2>
+    <div class="preview-wrap">
+      <svg id="preview" width="360" height="360" viewBox="0 0 360 360"></svg>
+      <div class="stats">
+        Plot corners tagged: <b id="statCount">0</b><br>
+        Bounding span N: <span id="statN">&mdash;</span><br>
+        Bounding span E: <span id="statE">&mdash;</span>
+      </div>
+    </div>
+  </section>
+
+  <button class="primary" onclick="generate()" id="genBtn">Generate workbook (.xlsx)</button>
+  <div id="status"></div>
+
+  <footer>Posts to <code id="apiUrlLabel"></code>/api/generate &middot; edit API_URL at the top of the script if you're pointing this at a different backend.</footer>
+</div>
+
+<script>
+const API_URL = ""; // relative -- same-origin on Vercel (frontend + /api share one domain).
+// Running the old standalone Flask dev server instead (`python api/index.py` on
+// port 5000) while opening this file directly? Set this to "http://localhost:5000".
+document.getElementById('apiUrlLabel').textContent = API_URL || window.location.origin;
+
+function stationField(idPrefix, label, defaultName, plotCorner){
+  return `
+    <div class="station-block">
+      <div class="name">${label}</div>
+      <label>Station name</label>
+      <input type="text" id="${idPrefix}_name" value="${defaultName}">
+      <label style="margin-top:8px">Northing</label>
+      <input type="number" step="any" id="${idPrefix}_n" value="0">
+      <label style="margin-top:8px">Easting</label>
+      <input type="number" step="any" id="${idPrefix}_e" value="0">
+      ${plotCorner !== undefined ? `
+      <div class="checkbox-row">
+        <input type="checkbox" id="${idPrefix}_plot" ${plotCorner ? 'checked' : ''} onchange="drawPreview()">
+        <label style="margin:0;text-transform:none;font-family:Inter,sans-serif;">This is a plot corner</label>
+      </div>` : ''}
+    </div>`;
+}
+
+document.getElementById('openingBlock').innerHTML =
+  stationField('bs1','Backsight 1','Cm1') +
+  stationField('bs2','Backsight 2','Cm2') +
+  stationField('start','Start station','Cm3', true);
+
+document.getElementById('closingBlock').innerHTML =
+  stationField('fs1','Foresight 1','Cm74') +
+  stationField('fs2','Foresight 2','Cm79') +
+  stationField('end','End station','Cm75', true);
+
+let cornerRowId = 0;
+function parseStationPaste(textareaId, roles){
+  // roles: array of [idPrefix, label] in the exact order rows must be pasted
+  const raw = document.getElementById(textareaId).value;
+  const lines = raw.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length);
+  const rows = [];
+  for(const line of lines){
+    const cells = (line.includes('\t') ? line.split('\t') : line.split(','))
+      .map(c => c.trim().replace(/^"|"$/g,''));
+    const [name, n, e] = cells;
+    if(!name || n === undefined || e === undefined) continue;
+    const nNum = parseFloat(n), eNum = parseFloat(e);
+    if(isNaN(nNum) || isNaN(eNum)) continue; // skip a header row if present
+    rows.push({name, n:nNum, e:eNum});
+  }
+  if(rows.length !== roles.length){
+    alert(`Expected ${roles.length} rows (one per station: ${roles.map(r=>r[1]).join(', ')}), found ${rows.length}. Nothing was filled in.`);
+    return;
+  }
+  roles.forEach(([prefix], i)=>{
+    document.getElementById(`${prefix}_name`).value = rows[i].name;
+    document.getElementById(`${prefix}_n`).value = rows[i].n;
+    document.getElementById(`${prefix}_e`).value = rows[i].e;
+  });
+  document.getElementById(textareaId).value = '';
+  drawPreview();
+}
+
+function clearCorners(){
+  document.getElementById('cornersBody').innerHTML = '';
+  updateCornerCount();
+  drawPreview();
+}
+
+function parseBoolLike(v, fallback=true){
+  if(v === undefined || v === '') return fallback;
+  const s = v.trim().toLowerCase();
+  if(['y','yes','true','1'].includes(s)) return true;
+  if(['n','no','false','0'].includes(s)) return false;
+  return fallback;
+}
+
+function parsePaste(replace){
+  const raw = document.getElementById('pasteArea').value;
+  const lines = raw.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length);
+  if(!lines.length){
+    alert('Paste some rows first (Stn, Northing, Easting, [Plot corner Y/N]).');
+    return;
+  }
+  const parsed = [];
+  for(const line of lines){
+    // Excel copy = tab-separated; fall back to comma if no tabs found
+    const cells = (line.includes('\t') ? line.split('\t') : line.split(','))
+      .map(c => c.trim().replace(/^"|"$/g,''));
+    const [name, n, e, plot] = cells;
+    if(!name || n === undefined || e === undefined) continue; // skip malformed/header rows
+    const nNum = parseFloat(n), eNum = parseFloat(e);
+    if(isNaN(nNum) || isNaN(eNum)) continue; // likely a header row like "Stn, Northing, Easting"
+    parsed.push({
+      name,
+      n: nNum,
+      e: eNum,
+      plot: parseBoolLike(plot, true)
+    });
+  }
+  if(!parsed.length){
+    alert('No valid rows found. Expected columns: Stn, Northing, Easting, [Plot corner Y/N].');
+    return;
+  }
+  if(replace) clearCorners();
+  parsed.forEach(p => addCorner(p.name, p.n, p.e, p.plot));
+  document.getElementById('pasteArea').value = '';
+}
+
+function addCorner(name='', n=0, e=0, plot=true){
+  cornerRowId++;
+  const id = cornerRowId;
+  const tr = document.createElement('tr');
+  tr.id = `corner_${id}`;
+  tr.innerHTML = `
+    <td><input type="text" id="c${id}_name" value="${name}" oninput="drawPreview()"></td>
+    <td><input type="number" step="any" id="c${id}_n" value="${n}" oninput="drawPreview()"></td>
+    <td><input type="number" step="any" id="c${id}_e" value="${e}" oninput="drawPreview()"></td>
+    <td style="text-align:center"><input type="checkbox" class="plot-flag" id="c${id}_plot" ${plot?'checked':''} onchange="drawPreview()"></td>
+    <td><button type="button" class="remove" onclick="removeCorner(${id})">remove</button></td>`;
+  document.getElementById('cornersBody').appendChild(tr);
+  updateCornerCount();
+  drawPreview();
+}
+function removeCorner(id){
+  document.getElementById(`corner_${id}`).remove();
+  updateCornerCount();
+  drawPreview();
+}
+function updateCornerCount(){
+  document.getElementById('cornerCount').textContent =
+    document.querySelectorAll('#cornersBody tr').length + ' rows';
+}
+
+function collectCorners(){
+  const rows = document.querySelectorAll('#cornersBody tr');
+  return Array.from(rows).map(tr=>{
+    const id = tr.id.split('_')[1];
+    return {
+      name: document.getElementById(`c${id}_name`).value,
+      n: parseFloat(document.getElementById(`c${id}_n`).value) || 0,
+      e: parseFloat(document.getElementById(`c${id}_e`).value) || 0,
+      is_plot_corner: document.getElementById(`c${id}_plot`).checked
+    };
+  });
+}
+
+function drawPreview(){
+  const pts = [];
+  const startN = parseFloat(document.getElementById('start_n').value)||0;
+  const startE = parseFloat(document.getElementById('start_e').value)||0;
+  if(document.getElementById('start_plot').checked) pts.push([startN,startE]);
+  collectCorners().forEach(c=>{ if(c.is_plot_corner) pts.push([c.n,c.e]); });
+  const endN = parseFloat(document.getElementById('end_n').value)||0;
+  const endE = parseFloat(document.getElementById('end_e').value)||0;
+  if(document.getElementById('end_plot').checked) pts.push([endN,endE]);
+
+  const svg = document.getElementById('preview');
+  svg.innerHTML = '';
+  document.getElementById('statCount').textContent = pts.length;
+
+  if(pts.length < 2){
+    document.getElementById('statN').textContent = '\u2014';
+    document.getElementById('statE').textContent = '\u2014';
+    return;
+  }
+  const ns = pts.map(p=>p[0]), es = pts.map(p=>p[1]);
+  const minN=Math.min(...ns), maxN=Math.max(...ns), minE=Math.min(...es), maxE=Math.max(...es);
+  document.getElementById('statN').textContent = (maxN-minN).toFixed(2)+' m';
+  document.getElementById('statE').textContent = (maxE-minE).toFixed(2)+' m';
+
+  const pad=30, w=360,h=360;
+  const spanN = (maxN-minN)||1, spanE=(maxE-minE)||1;
+  const scale = Math.min((w-2*pad)/spanE, (h-2*pad)/spanN);
+  const toXY = ([n,e]) => {
+    const x = pad + (e-minE)*scale;
+    const y = h - pad - (n-minN)*scale; // north = up
+    return [x,y];
+  };
+  const screenPts = pts.map(toXY);
+  const ns_svg = "http://www.w3.org/2000/svg";
+  const poly = document.createElementNS(ns_svg,'polygon');
+  poly.setAttribute('points', screenPts.map(p=>p.join(',')).join(' '));
+  poly.setAttribute('fill','rgba(111,231,221,0.12)');
+  poly.setAttribute('stroke','#6FE7DD');
+  poly.setAttribute('stroke-width','2');
+  svg.appendChild(poly);
+  screenPts.forEach(([x,y])=>{
+    const c = document.createElementNS(ns_svg,'circle');
+    c.setAttribute('cx',x); c.setAttribute('cy',y); c.setAttribute('r',4);
+    c.setAttribute('fill','#F4B860');
+    svg.appendChild(c);
+  });
+}
+
+function buildPayload(){
+  return {
+    project: document.getElementById('project').value,
+    date_line: document.getElementById('dateLine').value,
+    job_meta: {
+      job_number: jobNumber.value, client: jobClient.value,
+      surveyor: jobSurveyor.value, date: jobDate.value,
+      description: jobDescription.value
+    },
+    index_notes: {
+      instrument: instrument.value, district: district.value,
+      elevation: +elevation.value, msl_correction: +mslCorrection.value,
+      scale_factor: +scaleFactor.value
+    },
+    opening: {
+      backsight1: { name: bs1_name.value, n: +bs1_n.value, e: +bs1_e.value },
+      backsight2: { name: bs2_name.value, n: +bs2_n.value, e: +bs2_e.value },
+      start: { name: start_name.value, n: +start_n.value, e: +start_e.value, is_plot_corner: start_plot.checked }
+    },
+    closing: {
+      end: { name: end_name.value, n: +end_n.value, e: +end_e.value, is_plot_corner: end_plot.checked },
+      foresight1: { name: fs1_name.value, n: +fs1_n.value, e: +fs1_e.value },
+      foresight2: { name: fs2_name.value, n: +fs2_n.value, e: +fs2_e.value }
+    },
+    angle_corrections: {
+      row9: +e9.value, row10: +e10.value,
+      row_close1: +eclose1.value, row_close2: +eclose2.value
+    },
+    measured_total_distance: +measuredTotal.value,
+    corners: collectCorners(),
+    project_filename: (document.getElementById('project').value || 'traverse_form').replace(/[^a-z0-9]+/gi,'_').slice(0,40)
+  };
+}
+
+async function generate(){
+  const btn = document.getElementById('genBtn');
+  const status = document.getElementById('status');
+  btn.disabled = true;
+  status.className=''; status.textContent = 'Generating\u2026';
+  try{
+    const res = await fetch(`${API_URL}/api/generate`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(buildPayload())
+    });
+    if(!res.ok){
+      const err = await res.json().catch(()=>({error:'Request failed'}));
+      throw new Error(err.error || 'Request failed');
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'traverse_form.xlsx';
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    status.className='ok'; status.textContent = '\u2713 Workbook generated and downloaded.';
+  }catch(e){
+    status.className='err'; status.textContent = '\u2717 ' + e.message + ' (is the API reachable at ' + (API_URL || window.location.origin) + '/api/generate?)';
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+// seed with a few example rows so the form isn't empty on first load
+addCorner('cm51', 143587.19, 362847.18, true);
+addCorner('cm50', 142845.12, 362889.44, true);
+addCorner('cm49', 142521.76, 362878.44, true);
+drawPreview();
+['bs1_n','bs1_e','bs2_n','bs2_e','start_n','start_e','fs1_n','fs1_e','fs2_n','fs2_e','end_n','end_e']
+  .forEach(id=>document.getElementById(id).addEventListener('input', drawPreview));
+document.getElementById('start_plot').addEventListener('change', drawPreview);
+document.getElementById('end_plot').addEventListener('change', drawPreview);
+</script>
+</body>
+</html>
