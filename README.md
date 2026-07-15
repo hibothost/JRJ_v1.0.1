@@ -126,12 +126,29 @@ real-world example. Quick shape:
 | **ABSTRACT** | tagged plot corners | Station / Northing / Easting, pulled live from TRVS via formula. |
 | **AREA** | tagged plot corners | Shoelace-formula area & perimeter, polygon closed automatically. |
 
-## Verified
+## Verified against two independent real files
 
-Every TRVS column (bearings, distances, corrections, angular/linear
-misclosure) was diffed against the original file's real job data and
-matches exactly, row for row. The whole 8-sheet output recalculates with
-zero formula errors at 1, 3, 10, and 25 corner points.
+Checked against two real jobs' actual data (`Form_10.xls`, an 11-leg
+traverse, and `Form_6.xls`, a 7-leg traverse from a different job entirely
+— different district, different station names). Every TRVS column
+(bearings, distances, corrections, angular/linear misclosure) and every
+Field notes formula matches both originals exactly, row for row, across
+N = 1, 3, 6, 10, and 25 corner points with zero formula errors.
+
+Cross-checking against the second file caught two real bugs the first pass
+missed (it had only diffed the coordinate-correction columns, not the
+bearing-display ones): the per-corner angular correction was referencing
+the wrong row (wrong displayed bearing, though corrected coordinates were
+unaffected), and Field notes' index-correction/angle-check chaining had a
+few edge cases wrong. Both are fixed and re-verified against both files.
+
+Formatting was checked too: the intermediate decimal-degree bearing
+columns (TRVS F/J/K, DTM F, Field notes E) are hidden in the original,
+matching now. One thing deliberately *not* replicated: both original
+files' AREA sheet has a visible block of hardcoded coordinates for an
+unrelated plot — a stale leftover, not the intended design — so the
+generator keeps its own correct, job-specific, live-formula AREA sheet
+instead of copying that.
 
 ## Extending this project
 
