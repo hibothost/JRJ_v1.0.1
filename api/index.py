@@ -35,9 +35,13 @@ Design assumptions (documented so they're easy to challenge/change):
      polygon.)
 """
 
-from openpyxl import Workbook
-from openpyxl.styles import Font, Alignment
-from openpyxl.utils import get_column_letter
+try:
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment
+    from openpyxl.utils import get_column_letter
+    _IMPORT_ERROR = None
+except Exception as _e:  # pragma: no cover -- surfaces a readable error instead of a bare crash
+    _IMPORT_ERROR = _e
 
 FONT_NAME = "Arial"
 INPUT_FONT = Font(name=FONT_NAME, color="0000FF")   # blue = a cell the user typed in
@@ -224,6 +228,7 @@ def build_dtm(wb, data):
     _set(ws, "K24", "=SQRT(D24^2+E24^2)")
 
     ws.column_dimensions["A"].width = 10
+    ws.column_dimensions["F"].hidden = True  # intermediate decimal-degree calc, hidden in the original too
     return ws
 
 
@@ -289,9 +294,9 @@ def build_trvs(wb, data, corners):
 
         _set(ws, f"A{r}", f"=S{r}")
         if r == first_row:
-            _set(ws, f"E{r}", f"=E${last_row + 3}")
+            _set(ws, f"E{r}", f"=E${last_row + 6}")
         else:
-            _set(ws, f"E{r}", f"=E{prev}+E${last_row + 3}")
+            _set(ws, f"E{r}", f"=E{prev}+E${last_row + 6}")
         _set(ws, f"F{r}", f"=G{r}+H{r}/60+I{r}/3600-E{r}/3600")
         _set(ws, f"J{r}", f"=IF(K{r}<0,K{r}+360,K{r})")
         _set(ws, f"K{r}", f"=ATAN2(N{r},Q{r})/PI()*180")
@@ -313,7 +318,7 @@ def build_trvs(wb, data, corners):
     prev = last_row
 
     _set(ws, f"A{cr1}", "=DTM!A7")
-    _set(ws, f"E{cr1}", f"=E{prev}+E${cr3}")
+    _set(ws, f"E{cr1}", f"=E{prev}+E${cr3 + 3}")
     _set(ws, f"F{cr1}", f"=G{cr1}+H{cr1}/60+I{cr1}/3600-E{cr1}/3600")
     _set(ws, f"J{cr1}", f"=IF(K{cr1}<0,K{cr1}+360,K{cr1})")
     _set(ws, f"K{cr1}", f"=ATAN2(N{cr1},Q{cr1})/PI()*180")
@@ -384,6 +389,8 @@ def build_trvs(wb, data, corners):
 
     ws.column_dimensions["A"].width = 8
     ws.column_dimensions["V"].width = 14
+    for col in ("F", "J", "K"):  # intermediate bearing-calc columns, hidden in the original too
+        ws.column_dimensions[col].hidden = True
     return ws, {"first_row": first_row, "last_row": last_row, "cr1": cr1, "cr2": cr2, "cr3": cr3}
 
 
@@ -424,27 +431,40 @@ def build_field_notes(wb, data, corners, trvs_rows):
     _set(ws, "L8", "=TRVS!A11")
 
     # ---- Build the ordered block list -----------------------------
+    # fresh_h: this block gets its own manual "index correction" input.
+    # has_g:   this block gets an angle-check formula (vs. the block named
+    #          in g_h_ref, defaulting to the immediately preceding block).
+    # Confirmed against two independent real files: H and G don't always
+    # move together -- e.g. open2 has its own fresh H input *and* a G
+    # formula comparing it to open1.
     blocks = [
-        {"kind": "ref", "target": "=DTM!A12", "trvs_ref": 9, "distance": False, "first_occ": True},
-        {"kind": "ref", "target": "=DTM!A15", "trvs_ref": 10, "distance": False, "first_occ": False},
+        {"kind": "ref", "target": "=DTM!A12", "trvs_ref": 9, "distance": False,
+         "fresh_h": True, "has_g": False},
+        {"kind": "ref", "target": "=DTM!A15", "trvs_ref": 10, "distance": False,
+         "fresh_h": True, "has_g": True},
     ]
     for k in range(1, n + 2):  # legs 1 .. n+1
         leg_row = first_row + (k - 1) if k <= n else cr1
         blocks.append({"kind": "fs", "target": f"=TRVS!A{leg_row}", "trvs_ref": leg_row,
-                        "distance": True, "first_occ": False, "from_occ": k - 1, "to_occ": k})
-        blocks.append({"kind": "bs", "first_occ": True, "from_occ": k})
-    blocks.append({"kind": "ref", "target": f"=TRVS!A{cr2}", "trvs_ref": cr2, "distance": False, "first_occ": False})
-    blocks.append({"kind": "ref", "target": f"=TRVS!A{cr3}", "trvs_ref": cr3, "distance": False, "first_occ": False})
+                        "distance": True, "from_occ": k - 1, "to_occ": k,
+                        "fresh_h": False, "has_g": True, "anchor_to_open1": (k == 1)})
+        blocks.append({"kind": "bs", "from_occ": k, "fresh_h": True, "has_g": False})
+    blocks.append({"kind": "ref", "target": f"=TRVS!A{cr2}", "trvs_ref": cr2, "distance": False,
+                    "fresh_h": True, "has_g": False, "fresh_reset": True})
+    blocks.append({"kind": "ref", "target": f"=TRVS!A{cr3}", "trvs_ref": cr3, "distance": False,
+                    "fresh_h": False, "has_g": True})
 
     # ---- Render sequentially ---------------------------------------
     at_marker_of = {0: 8}
     foresight_arrival_base = {}
     row = 9
     prev_base = None
-    occ_first_block_base = None
+    open1_base = None
 
     for i, blk in enumerate(blocks):
         base = row
+        if i == 0:
+            open1_base = base
 
         if blk["kind"] in ("ref", "fs"):
             _set(ws, f"A{base}", blk["target"])
@@ -465,20 +485,25 @@ def build_field_notes(wb, data, corners, trvs_rows):
             _set(ws, f"J{base}", f"=J{fs_base}")
             _set(ws, f"K{base}", f"=K{fs_base}")
 
-        # H: fresh input on the first reading of an occupation, else a
-        # live reference back to that occupation's first reading.
-        if blk["first_occ"]:
+        # H: fresh manual input, or a live reference to where it chains from.
+        if blk["fresh_h"]:
             _set(ws, f"H{base}", 0, font=INPUT_FONT)
-            occ_first_block_base = base
+        elif blk.get("anchor_to_open1"):
+            _set(ws, f"H{base}", f"=H{open1_base}")
         else:
-            _set(ws, f"H{base}", f"=H{occ_first_block_base}")
+            _set(ws, f"H{base}", f"=H{prev_base}")
 
-        # G: angle check against the previous reading in the same
-        # occupation (absent on the first reading of an occupation).
-        if not blk["first_occ"]:
-            _set(ws, f"G{base}",
-                 f"=ROUND(((B{prev_base+2}+C{prev_base+2}/60+D{prev_base+2}/3600)"
-                 f"-(B{base+2}+C{base+2}/60+D{base+2}/3600))/2*3600,0)")
+        # G: angle check against the previous reading (or open1, for the
+        # confirmed leg-1 exception). Absent entirely where has_g is False.
+        if blk["has_g"]:
+            if blk.get("anchor_to_open1"):
+                _set(ws, f"G{base}",
+                     f"=ROUND(((B{open1_base+2}+C{open1_base+2}/60+D{open1_base+2}/3600)"
+                     f"-(B{base+2}+C{base+2}/60+D{base+2}/3600))/2*3600,0)")
+            else:
+                _set(ws, f"G{base}",
+                     f"=ROUND(((B{prev_base+2}+C{prev_base+2}/60+D{prev_base+2}/3600)"
+                     f"-(B{base+2}+C{base+2}/60+D{base+2}/3600))/2*3600,0)")
 
         if i == 0:  # very first block ever -- no G term at all
             _set(ws, f"F{base}", f"=I{base}+J{base}/60+K{base}/3600-H{base}/3600")
@@ -507,11 +532,17 @@ def build_field_notes(wb, data, corners, trvs_rows):
             at_marker_of[blk["to_occ"]] = base + 3
 
         prev_base = base
-        row += 4
+        # No blank spacer before close1 -- confirmed in the original files,
+        # it starts immediately after the closing-check's backsight block.
+        if i + 1 < len(blocks) and blocks[i + 1].get("fresh_reset"):
+            row += 3
+        else:
+            row += 4
 
     _set(ws, f"A{prev_base + 3}", "THE END", bold=True)
 
     ws.column_dimensions["A"].width = 10
+    ws.column_dimensions["E"].hidden = True  # intermediate decimal-degree calc, hidden in the original too
     return ws
 
 
@@ -669,6 +700,8 @@ except ImportError:
 
 @app.route("/api/generate", methods=["POST"])
 def generate():
+    if _IMPORT_ERROR is not None:
+        return jsonify({"error": f"Server dependency failed to import: {_IMPORT_ERROR}"}), 500
     try:
         data = request.get_json(force=True)
         wb = generate_workbook(data)
@@ -691,6 +724,8 @@ def generate():
 
 @app.route("/api/health", methods=["GET"])
 def health():
+    if _IMPORT_ERROR is not None:
+        return jsonify({"status": "degraded", "import_error": str(_IMPORT_ERROR)}), 500
     return jsonify({"status": "ok"})
 
 
