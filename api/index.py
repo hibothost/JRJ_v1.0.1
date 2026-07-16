@@ -1,20 +1,21 @@
+# ---------------------------------------------------------------------------
+# api/index.py -- Vercel serverless entrypoint.
+#
+# This is the Flask app AND the traverse-generation engine in one file
+# (merged deliberately -- Vercel's Python runtime is most reliable when a
+# function's entrypoint doesn't depend on sibling-module imports). Vercel
+# auto-detects the top-level `app` object below and serves it as a
+# serverless function at /api/index (routed to /api/* by vercel.json).
+#
+# Running locally without Vercel: `python api/index.py` still works (see
+# the __main__ block at the bottom) for standalone Flask dev/testing.
+# ---------------------------------------------------------------------------
+
 """
-api/index.py -- Vercel serverless entrypoint.
+traverse_generator.py
 
-This is the Flask app AND the traverse-generation engine in one file
-(merged deliberately -- Vercel's Python runtime is most reliable when a
-function's entrypoint doesn't depend on sibling-module imports). Vercel
-auto-detects the top-level `app` object below and serves it as a
-serverless function at /api/index (routed to /api/* by vercel.json).
-
-Running locally without Vercel: `python api/index.py` still works (see
-the __main__ block at the bottom) for standalone Flask dev/testing.
-
----
-
-Rebuilds the "Form 10" traverse-computation workbook (TOC's, Job History,
-INDEX, DTM, TRVS, Field notes, ABSTRACT, AREA sheets) for any number of
-corner points, from a plain JSON payload.
+Rebuilds the "Form 10" traverse-computation workbook (DTM, TRVS, ABSTRACT, AREA
+sheets) for any number of corner points, from a plain JSON payload.
 
 This mirrors the formula patterns of the original Form_10.xls exactly (see
 Traverse_Form_Extension_Guide.docx for the derivation) but generates them
@@ -44,17 +45,48 @@ except Exception as _e:  # pragma: no cover -- surfaces a readable error instead
     _IMPORT_ERROR = _e
 
 FONT_NAME = "Arial"
+
+# Colors verified against Form_10.xls and Form_6.xls (identical scheme in
+# both real files):
+#   FF0066CC -- a value that traces directly back to a DTM control station
+#               (station name/coords, or a bearing pulled straight from
+#               DTM rather than computed via ATAN2), plus the Distance/
+#               Meas-Dist/Corr(N)/Corr(E) columns on every row.
+#   FF0000FF -- the running angular correction column (E), input or not.
+#   FF993300 -- the leg-distance column (O).
+#   FF000000 -- everything else that's computed (bearing DMS breakdown,
+#               raw deltas, station/coordinate inputs on corner rows).
+DTM_LINK_COLOR = "FF0066CC"
+CORRECTION_COLOR = "FF0000FF"
+LEG_DIST_COLOR = "FF993300"
+COMPUTED_COLOR = "FF000000"
+
 INPUT_FONT = Font(name=FONT_NAME, color="0000FF")   # blue = a cell the user typed in
 FORMULA_FONT = Font(name=FONT_NAME, color="000000")  # black = computed
 LABEL_FONT = Font(name=FONT_NAME, bold=True)
 TITLE_FONT = Font(name=FONT_NAME, bold=True, size=12)
+CENTER = Alignment(horizontal="center")
+
+NUMFMT_COORD = "0.000"    # coordinates, distances, corrections
+NUMFMT_DIST2 = "0.00"     # a couple of distance-ish columns use 2dp instead of 3
+NUMFMT_INT = "0"          # degree/minute/second components
 
 
-def _set(ws, coord, value, font=FORMULA_FONT, bold=False):
+def _set(ws, coord, value, font=FORMULA_FONT, bold=False, color=None,
+         center=True, number_format=None):
     cell = ws[coord]
     cell.value = value
-    cell.font = Font(name=font.name, color=font.color, bold=bold or font.bold)
+    font_color = color or font.color
+    cell.font = Font(name=font.name, color=font_color, bold=bold or font.bold)
+    if center:
+        cell.alignment = CENTER
+    if number_format:
+        cell.number_format = number_format
     return cell
+
+
+def _merge(ws, cell_range):
+    ws.merge_cells(cell_range)
 
 
 # --------------------------------------------------------------------------
@@ -154,78 +186,75 @@ def build_index_sheet(wb, data):
 def build_dtm(wb, data):
     ws = wb.create_sheet("DTM")
     _set(ws, "A1", "DATUM COORDINATES AND COMPUTATIONS", font=TITLE_FONT, bold=True)
+    _merge(ws, "A1:K1")
     for c, label in zip("ABC", ("Stn", "Northings", "Eastings")):
         _set(ws, f"{c}2", label, bold=True)
 
     o = data["opening"]
     c_ = data["closing"]
 
+    def _control_row(r, stn):
+        _set(ws, f"A{r}", stn["name"], font=INPUT_FONT, color=COMPUTED_COLOR)
+        _set(ws, f"B{r}", stn["n"], font=INPUT_FONT, color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
+        _set(ws, f"C{r}", stn["e"], font=INPUT_FONT, color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
+        _merge(ws, f"D{r}:E{r}")
+
     # Opening control stations (rows 4-6)
-    _set(ws, "A4", o["backsight1"]["name"], font=INPUT_FONT)
-    _set(ws, "B4", o["backsight1"]["n"], font=INPUT_FONT)
-    _set(ws, "C4", o["backsight1"]["e"], font=INPUT_FONT)
-    _set(ws, "A5", o["backsight2"]["name"], font=INPUT_FONT)
-    _set(ws, "B5", o["backsight2"]["n"], font=INPUT_FONT)
-    _set(ws, "C5", o["backsight2"]["e"], font=INPUT_FONT)
-    _set(ws, "A6", o["start"]["name"], font=INPUT_FONT)
-    _set(ws, "B6", o["start"]["n"], font=INPUT_FONT)
-    _set(ws, "C6", o["start"]["e"], font=INPUT_FONT)
+    _control_row(4, o["backsight1"])
+    _control_row(5, o["backsight2"])
+    _control_row(6, o["start"])
 
     # Closing control stations (rows 7-9).
     # NOTE: A7 must hold the "end" (common) station -- the TRVS closing block
     # references DTM!A7 directly, and DTM!A8/A9 are the two foresight
     # stations whose bearings both resolve onto A7.
-    _set(ws, "A7", c_["end"]["name"], font=INPUT_FONT)
-    _set(ws, "B7", c_["end"]["n"], font=INPUT_FONT)
-    _set(ws, "C7", c_["end"]["e"], font=INPUT_FONT)
-    _set(ws, "A8", c_["foresight1"]["name"], font=INPUT_FONT)
-    _set(ws, "B8", c_["foresight1"]["n"], font=INPUT_FONT)
-    _set(ws, "C8", c_["foresight1"]["e"], font=INPUT_FONT)
-    _set(ws, "A9", c_["foresight2"]["name"], font=INPUT_FONT)
-    _set(ws, "B9", c_["foresight2"]["n"], font=INPUT_FONT)
-    _set(ws, "C9", c_["foresight2"]["e"], font=INPUT_FONT)
+    _control_row(7, c_["end"])
+    _control_row(8, c_["foresight1"])
+    _control_row(9, c_["foresight2"])
+
+    def _echo_row(r, src_r):
+        # "Echo" rows just copy a control station's name/coords -- black,
+        # matching the original (not the blue "computed bearing" rows).
+        _set(ws, f"A{r}", f"=A{src_r}", color=COMPUTED_COLOR)
+        _set(ws, f"B{r}", f"=B{src_r}", color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
+        _set(ws, f"C{r}", f"=C{src_r}", color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
+
+    def _bearing_row(r, from_r, to_r, headers=None):
+        # Row that computes bearing+distance between two echoed stations.
+        # D/E/F/G (deltas, raw bearing) stay black; H/I/J/K (final DMS +
+        # distance) are blue, matching the original.
+        _set(ws, f"D{r}", f"=B{from_r}-B{to_r}", color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
+        _set(ws, f"E{r}", f"=C{from_r}-C{to_r}", color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
+        _set(ws, f"F{r}", f"=ATAN2(D{r},E{r})*180/PI()", color=COMPUTED_COLOR)
+        _set(ws, f"G{r}", f"=IF(F{r}<0,F{r}+360,F{r})", color=COMPUTED_COLOR)
+        _set(ws, f"H{r}", f"=TRUNC(G{r},0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+        _set(ws, f"I{r}", f"=TRUNC((G{r}-H{r})*60,0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+        _set(ws, f"J{r}", f"=ROUND((G{r}-H{r}-I{r}/60)*3600,0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+        _set(ws, f"K{r}", f"=SQRT(D{r}^2+E{r}^2)", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
+        if headers:
+            _set(ws, f"D{r-1}", "\u00b1\u0394N", bold=True)
+            _set(ws, f"E{r-1}", "\u00b1\u0394E", bold=True)
+            _set(ws, f"H{r-1}", "BEARING", bold=True)
+            _merge(ws, f"H{r-1}:J{r-1}")
+            _set(ws, f"K{r-1}", "DIST", bold=True)
 
     _set(ws, "B11", "OPENING", bold=True)
-    _set(ws, "A12", "=A4"); _set(ws, "B12", "=B4"); _set(ws, "C12", "=C4")
-    _set(ws, "A13", "=A6"); _set(ws, "B13", "=B6"); _set(ws, "C13", "=C6")
-    _set(ws, "D13", "=B12-B13"); _set(ws, "E13", "=C12-C13")
-    _set(ws, "F13", "=ATAN2(D13,E13)*180/PI()")
-    _set(ws, "G13", "=IF(F13<0,F13+360,F13)")
-    _set(ws, "H13", "=TRUNC(G13,0)")
-    _set(ws, "I13", "=TRUNC((G13-H13)*60,0)")
-    _set(ws, "J13", "=ROUND((G13-H13-I13/60)*3600,0)")
-    _set(ws, "K13", "=SQRT(D13^2+E13^2)")
+    _echo_row(12, 4)
+    _echo_row(13, 6)
+    _bearing_row(13, 12, 13, headers=12)
 
-    _set(ws, "A15", "=A5"); _set(ws, "B15", "=B5"); _set(ws, "C15", "=C5")
-    _set(ws, "A16", "=A13"); _set(ws, "B16", "=B13"); _set(ws, "C16", "=C13")
-    _set(ws, "D16", "=B15-B16"); _set(ws, "E16", "=C15-C16")
-    _set(ws, "F16", "=ATAN2(D16,E16)*180/PI()")
-    _set(ws, "G16", "=IF(F16<0,F16+360,F16)")
-    _set(ws, "H16", "=TRUNC(G16,0)")
-    _set(ws, "I16", "=TRUNC((G16-H16)*60,0)")
-    _set(ws, "J16", "=ROUND((G16-H16-I16/60)*3600,0)")
-    _set(ws, "K16", "=SQRT(D16^2+E16^2)")
+    _echo_row(15, 5)
+    _echo_row(16, 13)
+    _bearing_row(16, 15, 16)
 
     _set(ws, "B19", "CLOSING", bold=True)
-    _set(ws, "A20", "=A8"); _set(ws, "B20", "=B8"); _set(ws, "C20", "=C8")
-    _set(ws, "A21", "=A7"); _set(ws, "B21", "=B7"); _set(ws, "C21", "=C7")
-    _set(ws, "D21", "=B20-B21"); _set(ws, "E21", "=C20-C21")
-    _set(ws, "F21", "=ATAN2(D21,E21)*180/PI()")
-    _set(ws, "G21", "=IF(F21<0,F21+360,F21)")
-    _set(ws, "H21", "=TRUNC(G21,0)")
-    _set(ws, "I21", "=TRUNC((G21-H21)*60,0)")
-    _set(ws, "J21", "=ROUND((G21-H21-I21/60)*3600,0)")
-    _set(ws, "K21", "=SQRT(D21^2+E21^2)")
+    _echo_row(20, 8)
+    _echo_row(21, 7)
+    _bearing_row(21, 20, 21, headers=20)
 
-    _set(ws, "A23", "=A9"); _set(ws, "B23", "=B9"); _set(ws, "C23", "=C9")
-    _set(ws, "A24", "=A21"); _set(ws, "B24", "=B21"); _set(ws, "C24", "=C21")
-    _set(ws, "D24", "=B23-B24"); _set(ws, "E24", "=C23-C24")
-    _set(ws, "F24", "=ATAN2(D24,E24)*180/PI()")
-    _set(ws, "G24", "=IF(F24<0,F24+360,F24)")
-    _set(ws, "H24", "=TRUNC(G24,0)")
-    _set(ws, "I24", "=TRUNC((G24-H24)*60,0)")
-    _set(ws, "J24", "=ROUND((G24-H24-I24/60)*3600,0)")
-    _set(ws, "K24", "=SQRT(D24^2+E24^2)")
+    _echo_row(23, 9)
+    _echo_row(24, 21)
+    _bearing_row(24, 23, 24)
 
     ws.column_dimensions["A"].width = 10
     ws.column_dimensions["F"].hidden = True  # intermediate decimal-degree calc, hidden in the original too
@@ -244,7 +273,11 @@ def build_trvs(wb, data, corners):
                "Q": "\u00b1\u0394E/m", "R": "Corr", "S": "Stn", "T": "N/m",
                "U": "E/m", "V": "Remarks"}
     for c, label in headers.items():
+        _set(ws, f"{c}1", label, bold=True)
         _set(ws, f"{c}8", label, bold=True)
+    _set(ws, "O8", "xx", bold=True)
+    _merge(ws, "B1:D1"); _merge(ws, "G1:I1")
+    _merge(ws, "B8:D8"); _merge(ws, "G8:I8")
 
     _set(ws, "D5", "TRAVERSE COMPUTATION SHEET", font=TITLE_FONT, bold=True)
     _set(ws, "A6", data.get("project", "PROJECT ------------------------------"))
@@ -256,25 +289,34 @@ def build_trvs(wb, data, corners):
     ang = data.get("angle_corrections", {})
 
     # ---- Opening block: rows 9, 10, 11 (fixed) -----------------------
-    _set(ws, "A9", "=DTM!A12")
-    _set(ws, "E9", ang.get("row9", 0), font=INPUT_FONT)
-    _set(ws, "F9", "=G9+H9/60+I9/3600-E9/3600")
-    _set(ws, "G9", "=DTM!H13"); _set(ws, "H9", "=DTM!I13"); _set(ws, "I9", "=DTM!J13")
-    _set(ws, "B9", "=TRUNC(F9,0)"); _set(ws, "C9", "=TRUNC((F9-B9)*60,0)")
-    _set(ws, "D9", "=ROUND((F9-B9-C9/60)*3600,0)")
-    _set(ws, "S9", "=A9")
+    _set(ws, "A9", "=DTM!A12", color=DTM_LINK_COLOR)
+    _set(ws, "E9", ang.get("row9", 0), font=INPUT_FONT, color=CORRECTION_COLOR, number_format=NUMFMT_INT)
+    _set(ws, "F9", "=G9+H9/60+I9/3600-E9/3600", color=DTM_LINK_COLOR)
+    _set(ws, "G9", "=DTM!H13", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, "H9", "=DTM!I13", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, "I9", "=DTM!J13", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, "B9", "=TRUNC(F9,0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, "C9", "=TRUNC((F9-B9)*60,0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, "D9", "=ROUND((F9-B9-C9/60)*3600,0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, "S9", "=A9", color=DTM_LINK_COLOR)
 
-    _set(ws, "A10", "=DTM!A15")
-    _set(ws, "E10", ang.get("row10", 0), font=INPUT_FONT)
-    _set(ws, "F10", "=G10+H10/60+I10/3600-E10/3600")
-    _set(ws, "G10", "=DTM!H16"); _set(ws, "H10", "=DTM!I16"); _set(ws, "I10", "=DTM!J16")
-    _set(ws, "B10", "=TRUNC(F10,0)"); _set(ws, "C10", "=TRUNC((F10-B10)*60,0)")
-    _set(ws, "D10", "=ROUND((F10-B10-C10/60)*3600,0)")
-    _set(ws, "S10", "=A10")
+    _set(ws, "A10", "=DTM!A15", color=DTM_LINK_COLOR)
+    _set(ws, "E10", ang.get("row10", 0), font=INPUT_FONT, color=CORRECTION_COLOR, number_format=NUMFMT_INT)
+    _set(ws, "F10", "=G10+H10/60+I10/3600-E10/3600", color=DTM_LINK_COLOR)
+    _set(ws, "G10", "=DTM!H16", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, "H10", "=DTM!I16", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, "I10", "=DTM!J16", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, "B10", "=TRUNC(F10,0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, "C10", "=TRUNC((F10-B10)*60,0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, "D10", "=ROUND((F10-B10-C10/60)*3600,0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, "S10", "=A10", color=DTM_LINK_COLOR)
 
-    _set(ws, "A11", "=S11")
-    _set(ws, "E11", "=AVERAGE(E9:E10)")
-    _set(ws, "S11", "=DTM!A13"); _set(ws, "T11", "=DTM!B13"); _set(ws, "U11", "=DTM!C13")
+    _set(ws, "A11", "=S11", color=DTM_LINK_COLOR)
+    _set(ws, "E11", "=AVERAGE(E9:E10)", color=CORRECTION_COLOR, number_format=NUMFMT_INT)
+    _set(ws, "S11", "=DTM!A13", color=DTM_LINK_COLOR)
+    _set(ws, "T11", "=DTM!B13", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
+    _set(ws, "U11", "=DTM!C13", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
+
 
     # ---- Corner-point block: rows 12 .. 11+n --------------------------
     first_row = 12
@@ -285,111 +327,129 @@ def build_trvs(wb, data, corners):
     for i, corner in enumerate(corners):
         r = first_row + i
         prev = r - 1
-        _set(ws, f"S{r}", corner["name"], font=INPUT_FONT)
-        _set(ws, f"T{r}", corner["n"], font=INPUT_FONT)
-        _set(ws, f"U{r}", corner["e"], font=INPUT_FONT)
-        # Leg distance (O) is derived from the coordinates themselves --
-        # no separate field measurement required.
-        _set(ws, f"O{r}", f"=M{r}")
+        _set(ws, f"S{r}", corner["name"], font=INPUT_FONT, color=COMPUTED_COLOR)
+        _set(ws, f"T{r}", corner["n"], font=INPUT_FONT, color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
+        _set(ws, f"U{r}", corner["e"], font=INPUT_FONT, color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
+        # O displays the same value as L (the final corrected distance) --
+        # weighting below is keyed off M directly instead, so this doesn't
+        # create a circular reference (L <- N/Q <- P/R <- O <- L).
+        _set(ws, f"O{r}", f"=L{r}", color=LEG_DIST_COLOR, number_format=NUMFMT_COORD)
 
-        _set(ws, f"A{r}", f"=S{r}")
+        _set(ws, f"A{r}", f"=S{r}", color=None)
         if r == first_row:
-            _set(ws, f"E{r}", f"=E${last_row + 6}")
+            _set(ws, f"E{r}", f"=E${last_row + 6}", color=CORRECTION_COLOR, number_format=NUMFMT_INT)
         else:
-            _set(ws, f"E{r}", f"=E{prev}+E${last_row + 6}")
-        _set(ws, f"F{r}", f"=G{r}+H{r}/60+I{r}/3600-E{r}/3600")
-        _set(ws, f"J{r}", f"=IF(K{r}<0,K{r}+360,K{r})")
-        _set(ws, f"K{r}", f"=ATAN2(N{r},Q{r})/PI()*180")
-        _set(ws, f"G{r}", f"=TRUNC(J{r},0)")
-        _set(ws, f"H{r}", f"=TRUNC((J{r}-G{r})*60,0)")
-        _set(ws, f"I{r}", f"=ROUND(((J{r}-G{r})-H{r}/60)*3600,0)")
-        _set(ws, f"B{r}", f"=TRUNC(F{r},0)")
-        _set(ws, f"C{r}", f"=TRUNC((F{r}-B{r})*60,0)")
-        _set(ws, f"D{r}", f"=ROUND((F{r}-B{r}-C{r}/60)*3600,0)")
-        _set(ws, f"L{r}", f"=ROUND((SQRT(N{r}^2+Q{r}^2)),5)")
-        _set(ws, f"M{r}", f"=SQRT((T{r}-T{prev})^2+(U{r}-U{prev})^2)")
-        _set(ws, f"N{r}", f"=T{r}-T{prev}-P{r}")
-        _set(ws, f"Q{r}", f"=U{r}-U{prev}-R{r}")
-        _set(ws, f"P{r}", f"=ROUND(($T${last_row + 4}*O{r}/$O${last_row + 2}),3)")
-        _set(ws, f"R{r}", f"=ROUND(($U${last_row + 4}*O{r}/$O${last_row + 2}),3)")
+            _set(ws, f"E{r}", f"=E{prev}+E${last_row + 6}", color=CORRECTION_COLOR, number_format=NUMFMT_INT)
+        _set(ws, f"F{r}", f"=G{r}+H{r}/60+I{r}/3600-E{r}/3600", color=COMPUTED_COLOR)
+        _set(ws, f"J{r}", f"=IF(K{r}<0,K{r}+360,K{r})", color=COMPUTED_COLOR)
+        _set(ws, f"K{r}", f"=ATAN2(N{r},Q{r})/PI()*180", color=COMPUTED_COLOR)
+        _set(ws, f"G{r}", f"=TRUNC(J{r},0)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
+        _set(ws, f"H{r}", f"=TRUNC((J{r}-G{r})*60,0)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
+        _set(ws, f"I{r}", f"=ROUND(((J{r}-G{r})-H{r}/60)*3600,0)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
+        _set(ws, f"B{r}", f"=TRUNC(F{r},0)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
+        _set(ws, f"C{r}", f"=TRUNC((F{r}-B{r})*60,0)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
+        _set(ws, f"D{r}", f"=ROUND((F{r}-B{r}-C{r}/60)*3600,0)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
+        _set(ws, f"L{r}", f"=ROUND((SQRT(N{r}^2+Q{r}^2)),5)", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
+        _set(ws, f"M{r}", f"=SQRT((T{r}-T{prev})^2+(U{r}-U{prev})^2)", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
+        _set(ws, f"N{r}", f"=T{r}-T{prev}-P{r}", color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
+        _set(ws, f"Q{r}", f"=U{r}-U{prev}-R{r}", color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
+        _set(ws, f"P{r}", f"=ROUND(($T${last_row + 4}*M{r}/$M${last_row + 2}),3)", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
+        _set(ws, f"R{r}", f"=ROUND(($U${last_row + 4}*M{r}/$M${last_row + 2}),3)", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
+
 
     # ---- Closing block: rows last_row+1 .. last_row+3 -----------------
     cr1, cr2, cr3 = last_row + 1, last_row + 2, last_row + 3
     prev = last_row
 
-    _set(ws, f"A{cr1}", "=DTM!A7")
-    _set(ws, f"E{cr1}", f"=E{prev}+E${cr3 + 3}")
-    _set(ws, f"F{cr1}", f"=G{cr1}+H{cr1}/60+I{cr1}/3600-E{cr1}/3600")
-    _set(ws, f"J{cr1}", f"=IF(K{cr1}<0,K{cr1}+360,K{cr1})")
-    _set(ws, f"K{cr1}", f"=ATAN2(N{cr1},Q{cr1})/PI()*180")
-    _set(ws, f"G{cr1}", f"=TRUNC(J{cr1},0)")
-    _set(ws, f"H{cr1}", f"=TRUNC((J{cr1}-G{cr1})*60,0)")
-    _set(ws, f"I{cr1}", f"=ROUND(((J{cr1}-G{cr1})-H{cr1}/60)*3600,0)")
-    _set(ws, f"B{cr1}", f"=TRUNC(F{cr1},0)")
-    _set(ws, f"C{cr1}", f"=TRUNC((F{cr1}-B{cr1})*60,0)")
-    _set(ws, f"D{cr1}", f"=ROUND((F{cr1}-B{cr1}-C{cr1}/60)*3600,0)")
-    _set(ws, f"L{cr1}", f"=ROUND((SQRT(N{cr1}^2+Q{cr1}^2)),5)")
-    _set(ws, f"M{cr1}", f"=SQRT((T{cr1}-T{prev})^2+(U{cr1}-U{prev})^2)")
-    _set(ws, f"N{cr1}", f"=T{cr1}-T{prev}-P{cr1}")
-    _set(ws, f"Q{cr1}", f"=U{cr1}-U{prev}-R{cr1}")
-    _set(ws, f"P{cr1}", f"=ROUND(($T${cr3 + 1}*O{cr1}/$O${cr2}),3)")
-    _set(ws, f"R{cr1}", f"=ROUND(($U${cr3 + 1}*O{cr1}/$O${cr2}),3)")
-    _set(ws, f"O{cr1}", f"=M{cr1}")
-    _set(ws, f"S{cr1}", "=DTM!A7"); _set(ws, f"T{cr1}", "=DTM!B7"); _set(ws, f"U{cr1}", "=DTM!C7")
+    _set(ws, f"A{cr1}", "=DTM!A7", color=DTM_LINK_COLOR)
+    _set(ws, f"E{cr1}", f"=E{prev}+E${cr3 + 3}", color=CORRECTION_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"F{cr1}", f"=G{cr1}+H{cr1}/60+I{cr1}/3600-E{cr1}/3600", color=COMPUTED_COLOR)
+    _set(ws, f"J{cr1}", f"=IF(K{cr1}<0,K{cr1}+360,K{cr1})", color=COMPUTED_COLOR)
+    _set(ws, f"K{cr1}", f"=ATAN2(N{cr1},Q{cr1})/PI()*180", color=COMPUTED_COLOR)
+    _set(ws, f"G{cr1}", f"=TRUNC(J{cr1},0)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"H{cr1}", f"=TRUNC((J{cr1}-G{cr1})*60,0)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"I{cr1}", f"=ROUND(((J{cr1}-G{cr1})-H{cr1}/60)*3600,0)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"B{cr1}", f"=TRUNC(F{cr1},0)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"C{cr1}", f"=TRUNC((F{cr1}-B{cr1})*60,0)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"D{cr1}", f"=ROUND((F{cr1}-B{cr1}-C{cr1}/60)*3600,0)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"L{cr1}", f"=ROUND((SQRT(N{cr1}^2+Q{cr1}^2)),5)", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
+    _set(ws, f"M{cr1}", f"=SQRT((T{cr1}-T{prev})^2+(U{cr1}-U{prev})^2)", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
+    _set(ws, f"N{cr1}", f"=T{cr1}-T{prev}-P{cr1}", color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
+    _set(ws, f"Q{cr1}", f"=U{cr1}-U{prev}-R{cr1}", color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
+    _set(ws, f"P{cr1}", f"=ROUND(($T${cr3 + 1}*M{cr1}/$M${cr2}),3)", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
+    _set(ws, f"R{cr1}", f"=ROUND(($U${cr3 + 1}*M{cr1}/$M${cr2}),3)", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
+    _set(ws, f"O{cr1}", f"=L{cr1}", color=LEG_DIST_COLOR, number_format=NUMFMT_COORD)
+    _set(ws, f"S{cr1}", "=DTM!A7", color=DTM_LINK_COLOR)
+    _set(ws, f"T{cr1}", "=DTM!B7", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
+    _set(ws, f"U{cr1}", "=DTM!C7", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
 
-    _set(ws, f"A{cr2}", "=DTM!A20")
-    _set(ws, f"E{cr2}", ang.get(f"row_close1", 0), font=INPUT_FONT)
-    _set(ws, f"F{cr2}", f"=G{cr2}+H{cr2}/60+I{cr2}/3600-E{cr2}/3600")
-    _set(ws, f"G{cr2}", "=DTM!H21"); _set(ws, f"H{cr2}", "=DTM!I21"); _set(ws, f"I{cr2}", "=DTM!J21")
-    _set(ws, f"B{cr2}", f"=TRUNC(F{cr2},0)")
-    _set(ws, f"C{cr2}", f"=TRUNC((F{cr2}-B{cr2})*60,0)")
-    _set(ws, f"D{cr2}", f"=ROUND((F{cr2}-B{cr2}-C{cr2}/60)*3600,0)")
-    _set(ws, f"L{cr2}", f"=SUM(L{first_row}:L{cr1})")
-    _set(ws, f"M{cr2}", f"=SUM(M{first_row}:M{cr1})")
-    _set(ws, f"N{cr2}", f"=SUM(N{first_row}:N{cr1})")
-    _set(ws, f"O{cr2}", f"=SUM(O{first_row}:O{cr1})")
-    _set(ws, f"P{cr2}", f"=SUM(P{first_row}:P{cr1})")
-    _set(ws, f"Q{cr2}", f"=SUM(Q{first_row}:Q{cr1})")
-    _set(ws, f"R{cr2}", f"=SUM(R{first_row}:R{cr1})")
-    _set(ws, f"S{cr2}", f"=A{cr2}")
-    _set(ws, f"T{cr2}", f"=T{cr1}-T11")
-    _set(ws, f"U{cr2}", f"=U{cr1}-U11")
+    _set(ws, f"A{cr2}", "=DTM!A20", color=DTM_LINK_COLOR)
+    _set(ws, f"E{cr2}", ang.get("row_close1", 0), font=INPUT_FONT, color=CORRECTION_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"F{cr2}", f"=G{cr2}+H{cr2}/60+I{cr2}/3600-E{cr2}/3600", color=DTM_LINK_COLOR)
+    _set(ws, f"G{cr2}", "=DTM!H21", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"H{cr2}", "=DTM!I21", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"I{cr2}", "=DTM!J21", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"B{cr2}", f"=TRUNC(F{cr2},0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"C{cr2}", f"=TRUNC((F{cr2}-B{cr2})*60,0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"D{cr2}", f"=ROUND((F{cr2}-B{cr2}-C{cr2}/60)*3600,0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"L{cr2}", f"=SUM(L{first_row}:L{cr1})", bold=True, color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
+    _set(ws, f"M{cr2}", f"=SUM(M{first_row}:M{cr1})", bold=True, color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
+    _set(ws, f"N{cr2}", f"=SUM(N{first_row}:N{cr1})", bold=True, color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
+    _set(ws, f"O{cr2}", f"=SUM(O{first_row}:O{cr1})", bold=True, color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
+    _set(ws, f"P{cr2}", f"=SUM(P{first_row}:P{cr1})", bold=True, color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
+    _set(ws, f"Q{cr2}", f"=SUM(Q{first_row}:Q{cr1})", bold=True, color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
+    _set(ws, f"R{cr2}", f"=SUM(R{first_row}:R{cr1})", bold=True, color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
+    _set(ws, f"S{cr2}", f"=A{cr2}", color=DTM_LINK_COLOR)
+    _set(ws, f"T{cr2}", f"=T{cr1}-T11", color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
+    _set(ws, f"U{cr2}", f"=U{cr1}-U11", color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
 
-    _set(ws, f"A{cr3}", "=DTM!A23")
-    _set(ws, f"E{cr3}", ang.get("row_close2", 0), font=INPUT_FONT)
-    _set(ws, f"F{cr3}", f"=G{cr3}+H{cr3}/60+I{cr3}/3600-E{cr3}/3600")
-    _set(ws, f"G{cr3}", "=DTM!H24"); _set(ws, f"H{cr3}", "=DTM!I24"); _set(ws, f"I{cr3}", "=DTM!J24")
-    _set(ws, f"B{cr3}", f"=TRUNC(F{cr3},0)")
-    _set(ws, f"C{cr3}", f"=TRUNC((F{cr3}-B{cr3})*60,0)")
-    _set(ws, f"D{cr3}", f"=ROUND((F{cr3}-B{cr3}-C{cr3}/60)*3600,0)")
-    _set(ws, f"S{cr3}", f"=A{cr3}")
-    _set(ws, f"T{cr3}", f"=N{cr2}")
-    _set(ws, f"U{cr3}", f"=Q{cr2}")
+    _set(ws, f"A{cr3}", "=DTM!A23", color=DTM_LINK_COLOR)
+    _set(ws, f"E{cr3}", ang.get("row_close2", 0), font=INPUT_FONT, color=CORRECTION_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"F{cr3}", f"=G{cr3}+H{cr3}/60+I{cr3}/3600-E{cr3}/3600", color=DTM_LINK_COLOR)
+    _set(ws, f"G{cr3}", "=DTM!H24", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"H{cr3}", "=DTM!I24", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"I{cr3}", "=DTM!J24", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"B{cr3}", f"=TRUNC(F{cr3},0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"C{cr3}", f"=TRUNC((F{cr3}-B{cr3})*60,0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"D{cr3}", f"=ROUND((F{cr3}-B{cr3}-C{cr3}/60)*3600,0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"S{cr3}", f"=A{cr3}", color=DTM_LINK_COLOR)
+    _set(ws, f"T{cr3}", f"=N{cr2}", color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
+    _set(ws, f"U{cr3}", f"=Q{cr2}", color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
 
     # ---- Misclosure summary: 3 rows --------------------------------
     avg_row, text_row, final_row = cr3 + 1, cr3 + 2, cr3 + 3
-    _set(ws, f"E{avg_row}", f"=AVERAGE(E{cr2}:E{cr3})")
-    _set(ws, f"T{avg_row}", f"=SQRT((Q{final_row}^2)/2-(Q{final_row}^2)/5)")
-    _set(ws, f"U{avg_row}", f"=SQRT(Q{final_row}^2-T{avg_row}^2)")
+    _set(ws, f"E{avg_row}", f"=AVERAGE(E{cr2}:E{cr3})", color=CORRECTION_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"T{avg_row}", f"=SQRT((Q{final_row}^2)/2-(Q{final_row}^2)/5)", color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
+    _set(ws, f"U{avg_row}", f"=SQRT(Q{final_row}^2-T{avg_row}^2)", color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
 
-    _set(ws, f"A{text_row}", "Angular misclsure is")
-    # Live label so the setup count always matches the actual number of points
-    _set(ws, f"A{final_row}", f'=CONCATENATE("Angular misclosure is in ",COUNTA(A11:A{cr1})," setups or")')
-    _set(ws, f"E{final_row}", f"=E{avg_row}/COUNTA(A11:A{cr1})")
-    _set(ws, f"G{final_row}", '" per setup')
+    _set(ws, f"A{text_row}", "Angular misclsure is", color=COMPUTED_COLOR)
+    _merge(ws, f"A{text_row}:D{text_row}")
+    # Live label so the station count always matches the actual number of
+    # points. Denominator is (number of stations x 2) -- two angle
+    # observations (backsight + foresight) per station occupied.
+    station_count = f"COUNTA(A11:A{cr1})"
+    _set(ws, f"A{final_row}",
+         f'=CONCATENATE("Angular misclosure is in ",{station_count}*2," observations or")',
+         color=COMPUTED_COLOR)
+    _merge(ws, f"A{final_row}:D{final_row}")
+    _set(ws, f"E{final_row}", f"=E{avg_row}/({station_count}*2)", bold=True, color=CORRECTION_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"G{final_row}", '" per station', bold=True, color=COMPUTED_COLOR)
+    _merge(ws, f"G{final_row}:I{final_row}")
 
-    _set(ws, f"L{final_row}", "Linear misclosure is =")
+    _set(ws, f"L{final_row}", "Linear misclosure is =", color=COMPUTED_COLOR)
+    _merge(ws, f"L{final_row}:P{final_row}")
     # NOTE: this is a genuinely independent figure (verified against the
     # original file) -- typically the total distance for the wider survey
     # job, not just this traverse's own perimeter -- so it stays an input.
-    _set(ws, f"T{final_row}", data.get("measured_total_distance", 0), font=INPUT_FONT)
-    _set(ws, f"Q{final_row}", f"=ROUND((M{cr2}/T{final_row}),3)")
-    _set(ws, f"R{final_row}", "m")
-    _set(ws, f"S{final_row}", "or 1 in")
+    _set(ws, f"T{final_row}", data.get("measured_total_distance", 0), font=INPUT_FONT, bold=True, color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
+    _merge(ws, f"T{final_row}:U{final_row}")
+    _set(ws, f"Q{final_row}", f"=ROUND((M{cr2}/T{final_row}),3)", color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
+    _set(ws, f"R{final_row}", "m", color=COMPUTED_COLOR)
+    _set(ws, f"S{final_row}", "or 1 in", bold=True, color=COMPUTED_COLOR)
 
     ws.column_dimensions["A"].width = 8
     ws.column_dimensions["V"].width = 14
-    for col in ("F", "J", "K"):  # intermediate bearing-calc columns, hidden in the original too
+    for col in ("F", "J", "K", "M", "O"):  # intermediate/duplicate columns, hidden in the original too
         ws.column_dimensions[col].hidden = True
     return ws, {"first_row": first_row, "last_row": last_row, "cr1": cr1, "cr2": cr2, "cr3": cr3}
 
@@ -424,7 +484,10 @@ def build_field_notes(wb, data, corners, trvs_rows):
     for c, label in headers.items():
         _set(ws, f"{c}1", label, bold=True)
         _set(ws, f"{c}7", label, bold=True)
+    _merge(ws, "B1:F1"); _merge(ws, "G1:H1"); _merge(ws, "I1:K1")
+    _merge(ws, "B7:F7"); _merge(ws, "G7:H7"); _merge(ws, "I7:K7")
     _set(ws, "A5", "FIELD NOTES", font=TITLE_FONT, bold=True)
+    _merge(ws, "A5:O5")
     _set(ws, "M6", "=INDEX!F95")
 
     _set(ws, "K8", "AT")
@@ -539,10 +602,13 @@ def build_field_notes(wb, data, corners, trvs_rows):
         else:
             row += 4
 
-    _set(ws, f"A{prev_base + 3}", "THE END", bold=True)
+    end_row = prev_base + 3
+    _set(ws, f"A{end_row}", "THE END", bold=True)
+    _merge(ws, f"A{end_row}:O{end_row}")
 
     ws.column_dimensions["A"].width = 10
     ws.column_dimensions["E"].hidden = True  # intermediate decimal-degree calc, hidden in the original too
+    ws.column_dimensions["F"].hidden = True
     return ws
 
 
@@ -551,17 +617,22 @@ def build_field_notes(wb, data, corners, trvs_rows):
 # --------------------------------------------------------------------------
 def build_abstract(wb, plot_corner_refs):
     ws = wb.create_sheet("ABSTRACT")
-    _set(ws, "D3", "ABSTRACT OF RESULTS", font=TITLE_FONT, bold=True)
-    _set(ws, "D4", "Stn", bold=True)
-    _set(ws, "F4", "Northings", bold=True)
-    _set(ws, "H4", "Eastings", bold=True)
+    _set(ws, "C3", "ABSTRACT OF RESULTS", font=TITLE_FONT, bold=True)
+    _merge(ws, "C3:E3")
+    _set(ws, "C4", "Stn", bold=True)
+    _set(ws, "D4", "Northings", bold=True)
+    _set(ws, "E4", "Eastings", bold=True)
 
     row = 5
     for ref in plot_corner_refs:
-        _set(ws, f"D{row}", f"=TRVS!S{ref}")
-        _set(ws, f"F{row}", f"=TRVS!T{ref}")
-        _set(ws, f"H{row}", f"=TRVS!U{ref}")
+        _set(ws, f"C{row}", f"=TRVS!S{ref}", color=DTM_LINK_COLOR)
+        _set(ws, f"D{row}", f"=TRVS!T{ref}", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
+        _set(ws, f"E{row}", f"=TRVS!U{ref}", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
         row += 1
+
+    ws.column_dimensions["C"].width = 12
+    ws.column_dimensions["D"].width = 12
+    ws.column_dimensions["E"].width = 12
     return ws
 
 
@@ -572,38 +643,42 @@ def build_abstract(wb, plot_corner_refs):
 def build_area(wb, plot_corner_refs):
     ws = wb.create_sheet("AREA")
     _set(ws, "C2", "AREA COMPUTATION", font=TITLE_FONT, bold=True)
+    _merge(ws, "C2:D2")
     _set(ws, "B5", "PLOT", bold=True)
     _set(ws, "B6", "POINT", bold=True); _set(ws, "C6", "N/m", bold=True)
     _set(ws, "D6", "E/m", bold=True); _set(ws, "G6", "DIST", bold=True)
 
     closed_refs = list(plot_corner_refs) + [plot_corner_refs[0]]  # close the polygon
     start_row = 7
-    _set(ws, f"B{start_row}", f"=TRVS!S{closed_refs[0]}")
-    _set(ws, f"C{start_row}", f"=TRVS!T{closed_refs[0]}")
-    _set(ws, f"D{start_row}", f"=TRVS!U{closed_refs[0]}")
+    _set(ws, f"B{start_row}", f"=TRVS!S{closed_refs[0]}", color=DTM_LINK_COLOR)
+    _set(ws, f"C{start_row}", f"=TRVS!T{closed_refs[0]}", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
+    _set(ws, f"D{start_row}", f"=TRVS!U{closed_refs[0]}", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
 
     row = start_row + 1
     for ref in closed_refs[1:]:
         prev = row - 1
-        _set(ws, f"B{row}", f"=TRVS!S{ref}")
-        _set(ws, f"C{row}", f"=TRVS!T{ref}")
-        _set(ws, f"D{row}", f"=TRVS!U{ref}")
-        _set(ws, f"E{row}", f"=D{prev}*C{row}")
-        _set(ws, f"F{row}", f"=C{prev}*D{row}")
-        _set(ws, f"G{row}", f"=SQRT(((C{row}-C{prev})^2)+((D{row}-D{prev})^2))")
+        _set(ws, f"B{row}", f"=TRVS!S{ref}", color=DTM_LINK_COLOR)
+        _set(ws, f"C{row}", f"=TRVS!T{ref}", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
+        _set(ws, f"D{row}", f"=TRVS!U{ref}", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
+        _set(ws, f"E{row}", f"=D{prev}*C{row}", color=COMPUTED_COLOR)
+        _set(ws, f"F{row}", f"=C{prev}*D{row}", color=COMPUTED_COLOR)
+        _set(ws, f"G{row}", f"=SQRT(((C{row}-C{prev})^2)+((D{row}-D{prev})^2))", color=DTM_LINK_COLOR, number_format=NUMFMT_DIST2)
         row += 1
 
     last_data_row = row - 1
     sum_row = row + 1
-    _set(ws, f"E{sum_row}", f"=SUM(E{start_row+1}:E{last_data_row})")
-    _set(ws, f"F{sum_row}", f"=SUM(F{start_row+1}:F{last_data_row})")
+    _set(ws, f"E{sum_row}", f"=SUM(E{start_row+1}:E{last_data_row})", bold=True, color=COMPUTED_COLOR)
+    _set(ws, f"F{sum_row}", f"=SUM(F{start_row+1}:F{last_data_row})", bold=True, color=COMPUTED_COLOR)
 
-    _set(ws, f"B{sum_row+1}", "AREA=", bold=True)
-    _set(ws, f"C{sum_row+1}", f"=ABS((E{sum_row}-F{sum_row})/20000)")
-    _set(ws, f"D{sum_row+1}", "HECTARES")
-    _set(ws, f"B{sum_row+2}", "OR")
-    _set(ws, f"C{sum_row+2}", f"=2.471*C{sum_row+1}")
-    _set(ws, f"D{sum_row+2}", "ACRES")
+    _set(ws, f"B{sum_row+1}", "AREA=", bold=True, color=COMPUTED_COLOR)
+    _set(ws, f"C{sum_row+1}", f"=ABS((E{sum_row}-F{sum_row})/20000)", bold=True, color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
+    _set(ws, f"D{sum_row+1}", "HECTARES", color=COMPUTED_COLOR)
+    _set(ws, f"B{sum_row+2}", "OR", bold=True, color=COMPUTED_COLOR)
+    _set(ws, f"C{sum_row+2}", f"=2.471*C{sum_row+1}", bold=True, color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
+    _set(ws, f"D{sum_row+2}", "ACRES", color=COMPUTED_COLOR)
+
+    ws.column_dimensions["E"].hidden = True
+    ws.column_dimensions["F"].hidden = True
     return ws
 
 
@@ -657,6 +732,11 @@ def generate_workbook(data):
 
     build_abstract(wb, plot_refs)
     build_area(wb, plot_refs)
+
+    # Match the original files' tab order exactly.
+    desired_order = ["TOC's", "Job History", "INDEX", "ABSTRACT", "DTM",
+                      "Field notes", "TRVS", "AREA"]
+    wb._sheets = [wb[name] for name in desired_order]
 
     return wb
 
