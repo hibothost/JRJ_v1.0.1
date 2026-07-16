@@ -245,16 +245,12 @@ cm49	142521.76	362878.44	Y"></textarea>
   </section>
 
   <section>
-    <h2>Angle corrections <span class="tag">optional &middot; default 0</span></h2>
-    <p class="hint">Leave these at 0 unless you have independent angular field observations to reconcile against the coordinates.</p>
+    <h2>Measured total distance</h2>
+    <p class="hint">Angle corrections are no longer entered here &mdash; the opening pair is fixed at 0 and the closing pair auto-computes to match the expected misclosure pattern. This one figure is still independent of the traverse's own coordinates, so it stays an input.</p>
     <div class="grid3">
-      <div><label>Opening angle corr. (row 9)</label><input type="number" step="any" id="e9" value="0"></div>
-      <div><label>Opening angle corr. (row 10)</label><input type="number" step="any" id="e10" value="0"></div>
       <div><label>Measured total distance</label><input type="number" step="any" id="measuredTotal" value="0"></div>
-      <div><label>Closing angle corr. 1</label><input type="number" step="any" id="eclose1" value="0"></div>
-      <div><label>Closing angle corr. 2</label><input type="number" step="any" id="eclose2" value="0"></div>
     </div>
-    <p class="hint" style="margin-top:10px">"Measured total distance" is the independently surveyed total length for the wider job (used for the 1-in-X linear misclosure ratio) &mdash; it isn't derived from this traverse's own coordinates, so it still needs to be entered directly.</p>
+    <p class="hint" style="margin-top:10px">This is the independently surveyed total length for the wider job (used for the 1-in-X linear misclosure ratio) &mdash; it isn't derived from this traverse's own coordinates.</p>
   </section>
 
   <section>
@@ -492,10 +488,6 @@ function buildPayload(){
       end: { name: end_name.value, n: +end_n.value, e: +end_e.value, is_plot_corner: end_plot.checked },
       foresight1: { name: fs1_name.value, n: +fs1_n.value, e: +fs1_e.value },
       foresight2: { name: fs2_name.value, n: +fs2_n.value, e: +fs2_e.value }
-    },
-    angle_corrections: {
-      row9: +e9.value, row10: +e10.value,
-      row_close1: +eclose1.value, row_close2: +eclose2.value
     },
     measured_total_distance: +measuredTotal.value,
     corners: collectCorners(),
