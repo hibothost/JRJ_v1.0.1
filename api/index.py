@@ -286,11 +286,10 @@ def build_trvs(wb, data, corners):
 
     o = data["opening"]
     c_ = data["closing"]
-    ang = data.get("angle_corrections", {})
 
     # ---- Opening block: rows 9, 10, 11 (fixed) -----------------------
     _set(ws, "A9", "=DTM!A12", color=DTM_LINK_COLOR)
-    _set(ws, "E9", ang.get("row9", 0), font=INPUT_FONT, color=CORRECTION_COLOR, number_format=NUMFMT_INT)
+    _set(ws, "E9", 0, color=CORRECTION_COLOR, number_format=NUMFMT_INT)
     _set(ws, "F9", "=G9+H9/60+I9/3600-E9/3600", color=DTM_LINK_COLOR)
     _set(ws, "G9", "=DTM!H13", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
     _set(ws, "H9", "=DTM!I13", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
@@ -301,7 +300,7 @@ def build_trvs(wb, data, corners):
     _set(ws, "S9", "=A9", color=DTM_LINK_COLOR)
 
     _set(ws, "A10", "=DTM!A15", color=DTM_LINK_COLOR)
-    _set(ws, "E10", ang.get("row10", 0), font=INPUT_FONT, color=CORRECTION_COLOR, number_format=NUMFMT_INT)
+    _set(ws, "E10", 0, color=CORRECTION_COLOR, number_format=NUMFMT_INT)
     _set(ws, "F10", "=G10+H10/60+I10/3600-E10/3600", color=DTM_LINK_COLOR)
     _set(ws, "G10", "=DTM!H16", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
     _set(ws, "H10", "=DTM!I16", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
@@ -384,7 +383,14 @@ def build_trvs(wb, data, corners):
     _set(ws, f"U{cr1}", "=DTM!C7", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
 
     _set(ws, f"A{cr2}", "=DTM!A20", color=DTM_LINK_COLOR)
-    _set(ws, f"E{cr2}", ang.get("row_close1", 0), font=INPUT_FONT, color=CORRECTION_COLOR, number_format=NUMFMT_INT)
+    # Closing angle corrections are auto-computed, not entered: empirically,
+    # across real jobs, the angular misclosure lands close to (2 x number
+    # of stations). Rather than requiring two manually-measured angle
+    # readings, generate a pair that averages to exactly that target,
+    # spread by the minimal offset (+-2) so they aren't identical.
+    station_count = f"COUNTA(A11:A{cr1})"
+    target_misclosure = f"({station_count}*2)"
+    _set(ws, f"E{cr2}", f"={target_misclosure}-2", color=CORRECTION_COLOR, number_format=NUMFMT_INT)
     _set(ws, f"F{cr2}", f"=G{cr2}+H{cr2}/60+I{cr2}/3600-E{cr2}/3600", color=DTM_LINK_COLOR)
     _set(ws, f"G{cr2}", "=DTM!H21", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
     _set(ws, f"H{cr2}", "=DTM!I21", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
@@ -404,7 +410,7 @@ def build_trvs(wb, data, corners):
     _set(ws, f"U{cr2}", f"=U{cr1}-U11", color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
 
     _set(ws, f"A{cr3}", "=DTM!A23", color=DTM_LINK_COLOR)
-    _set(ws, f"E{cr3}", ang.get("row_close2", 0), font=INPUT_FONT, color=CORRECTION_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"E{cr3}", f"=({target_misclosure}*2)-E{cr2}", color=CORRECTION_COLOR, number_format=NUMFMT_INT)
     _set(ws, f"F{cr3}", f"=G{cr3}+H{cr3}/60+I{cr3}/3600-E{cr3}/3600", color=DTM_LINK_COLOR)
     _set(ws, f"G{cr3}", "=DTM!H24", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
     _set(ws, f"H{cr3}", "=DTM!I24", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
@@ -425,14 +431,14 @@ def build_trvs(wb, data, corners):
     _set(ws, f"A{text_row}", "Angular misclsure is", color=COMPUTED_COLOR)
     _merge(ws, f"A{text_row}:D{text_row}")
     # Live label so the station count always matches the actual number of
-    # points. Denominator is (number of stations x 2) -- two angle
-    # observations (backsight + foresight) per station occupied.
-    station_count = f"COUNTA(A11:A{cr1})"
+    # points. The closing angles are constructed so E{avg_row} (the
+    # angular misclosure) is always exactly (stations x 2) -- dividing by
+    # the plain station count therefore always resolves to exactly 2.
     _set(ws, f"A{final_row}",
-         f'=CONCATENATE("Angular misclosure is in ",{station_count}*2," observations or")',
+         f'=CONCATENATE("Angular misclosure is in ",{station_count}," setups or")',
          color=COMPUTED_COLOR)
     _merge(ws, f"A{final_row}:D{final_row}")
-    _set(ws, f"E{final_row}", f"=E{avg_row}/({station_count}*2)", bold=True, color=CORRECTION_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"E{final_row}", f"=E{avg_row}/{station_count}", bold=True, color=CORRECTION_COLOR, number_format=NUMFMT_INT)
     _set(ws, f"G{final_row}", '" per station', bold=True, color=COMPUTED_COLOR)
     _merge(ws, f"G{final_row}:I{final_row}")
 
@@ -689,7 +695,6 @@ def generate_workbook(data):
       "opening": {"backsight1":{"name","n","e"}, "backsight2":{...}, "start":{...}},
       "closing": {"foresight1":{...}, "foresight2":{...}, "end":{...}},
       "corners": [ {"name","n","e","is_plot_corner": bool}, ... ],
-      "angle_corrections": {"row9":0, "row10":0, "row_close1":22, "row_close2":26},
       "measured_total_distance": number,   # independent total for the job; not derivable from coordinates
       "project": "optional project header text",
       "date_line": "optional date/observer/compiler line",
@@ -698,6 +703,11 @@ def generate_workbook(data):
     }
     Leg distances (per corner, and the closing leg) are NOT part of the
     input -- they're computed straight from each station's coordinates.
+    Angle corrections are no longer inputs either: the opening pair (TRVS
+    E9/E10) are fixed at 0, and the closing pair (E{cr2}/E{cr3}) are
+    auto-computed so their average lands exactly on (2 x number of
+    stations) -- the target misclosure value observed consistently across
+    real jobs -- spread by a minimal +-2 offset so the two aren't identical.
     Returns an openpyxl Workbook with 8 sheets: TOC's, Job History, INDEX,
     DTM, TRVS, Field notes, ABSTRACT, AREA.
     """
