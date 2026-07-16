@@ -150,6 +150,23 @@ unrelated plot — a stale leftover, not the intended design — so the
 generator keeps its own correct, job-specific, live-formula AREA sheet
 instead of copying that.
 
+## Formatting fidelity (latest correction pass)
+
+A follow-up review against both sample files caught a further round of
+things: sheet tab order now matches the originals exactly (TOC's, Job
+History, INDEX, ABSTRACT, DTM, Field notes, TRVS, AREA); merged cells now
+match on DTM/TRVS/Field notes/ABSTRACT/AREA; `O` (leg distance) now equals
+`L` (final corrected distance) rather than `M` (raw distance) — done
+without creating a circular reference by moving the `P`/`R` weighting to
+key off `M` directly; angular misclosure per station is now `(number of
+stations × 2)`; additional hidden columns (TRVS `M`/`O`, AREA `E`/`F`,
+Field notes `F`); ABSTRACT's blank spacer columns are gone (Stn/Northings/
+Eastings are now contiguous and centered); and colors/number
+formats/alignment now match the samples' scheme throughout (DTM-linked
+cells in blue, the angular correction in a different blue, leg distance in
+brown, everything else computed in black; 3dp for coordinates/distances,
+whole numbers for degree components, centered throughout).
+
 ## Extending this project
 
 - **Auth / persistence** — stateless right now: one request in, one file
