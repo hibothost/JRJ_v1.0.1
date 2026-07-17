@@ -36,9 +36,11 @@ Design assumptions (documented so they're easy to challenge/change):
      polygon.)
 """
 
+import random
+
 try:
     from openpyxl import Workbook
-    from openpyxl.styles import Font, Alignment
+    from openpyxl.styles import Font, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
     _IMPORT_ERROR = None
 except Exception as _e:  # pragma: no cover -- surfaces a readable error instead of a bare crash
@@ -66,6 +68,10 @@ FORMULA_FONT = Font(name=FONT_NAME, color="000000")  # black = computed
 LABEL_FONT = Font(name=FONT_NAME, bold=True)
 TITLE_FONT = Font(name=FONT_NAME, bold=True, size=12)
 CENTER = Alignment(horizontal="center")
+LEFT = Alignment(horizontal="left")
+RIGHT = Alignment(horizontal="right")
+_thin = Side(style="thin")
+THIN_BORDER = Border(top=_thin, bottom=_thin, left=_thin, right=_thin)
 
 NUMFMT_COORD = "0.000"    # coordinates, distances, corrections
 NUMFMT_DIST2 = "0.00"     # a couple of distance-ish columns use 2dp instead of 3
@@ -73,15 +79,21 @@ NUMFMT_INT = "0"          # degree/minute/second components
 
 
 def _set(ws, coord, value, font=FORMULA_FONT, bold=False, color=None,
-         center=True, number_format=None):
+         center=True, number_format=None, align=None, border=None):
     cell = ws[coord]
     cell.value = value
     font_color = color or font.color
     cell.font = Font(name=font.name, color=font_color, bold=bold or font.bold)
-    if center:
+    if align == "left":
+        cell.alignment = LEFT
+    elif align == "right":
+        cell.alignment = RIGHT
+    elif center:
         cell.alignment = CENTER
     if number_format:
         cell.number_format = number_format
+    if border:
+        cell.border = border
     return cell
 
 
@@ -95,26 +107,34 @@ def _merge(ws, cell_range):
 # --------------------------------------------------------------------------
 def build_toc(wb):
     ws = wb.create_sheet("TOC's")
-    _set(ws, "D1", "TABLE OF CONTENTS", font=TITLE_FONT, bold=True)
-    _set(ws, "B4", "ITEM", bold=True)
-    _set(ws, "I4", "PAGE", bold=True)
+    _set(ws, "D1", "TABLE OF CONTENTS", font=TITLE_FONT, bold=True, align="left")
+    _set(ws, "B4", "    ITEM ", bold=True, align="left")
+    _set(ws, "I4", " PAGE", bold=True)
     items = [
-        "Mutation form",
-        "Plane page",
-        "Table of contents",
-        "Job History",
-        "Index to computations",
-        "Abstract of coordinates",
-        "Datum Coordinates and Computations",
-        "Field notes",
-        "Traverse Computation sheet",
-        "Area Computation",
+        ("Mutation form", 1),
+        ("Plane page", 2),
+        ("Table of contents", 3),
+        ("Job History", 4),
+        ("Index to computations", 5),
+        ("Abstract of coordinates", 6),
+        ("Datum Coordinates and Computations", 7),
+        ("Field notes", 8),
+        ("Traverse Computation sheet", 9),
+        ("Area Computation", 10),
     ]
-    for i, item in enumerate(items):
+    for i, (item, page) in enumerate(items):
         r = 6 + i
         _set(ws, f"A{r}", i + 1)
-        _set(ws, f"B{r}", item + " " + "." * 30)
-        _set(ws, f"I{r}", i + 1)
+        dots = "\u2026" * max(6, 60 - len(item))
+        _set(ws, f"B{r}", f"{item}{dots}", align="left")
+        _merge(ws, f"B{r}:H{r}")
+        _set(ws, f"I{r}", page)
+
+    ws.column_dimensions["A"].width = 5
+    ws.column_dimensions["B"].width = 14
+    for col in "CDEFGH":
+        ws.column_dimensions[col].width = 9
+    ws.column_dimensions["I"].width = 8
     return ws
 
 
@@ -151,34 +171,55 @@ def build_index_sheet(wb, data):
     ws = wb.create_sheet("INDEX")
     idx = data.get("index_notes", {})
     _set(ws, "D80", "INDEX TO COMPUTATIONS", font=TITLE_FONT, bold=True)
-    _set(ws, "B83", f'The job was done using the total station {idx.get("instrument", "------------")} observing horizontal distances.')
-    _set(ws, "B84", "The following are the standard corrections which were applied to obtain to")
-    _set(ws, "B85", "the final distances.")
+    _merge(ws, "D80:I80")
 
-    _set(ws, "B87", "Height above sea level")
+    _set(ws, "B83", f'The job was done using the total station {idx.get("instrument", "------------")} observing horizontal distances.', align="left")
+    _merge(ws, "B83:I83")
+    _set(ws, "B84", "The following are the standard corrections which were applied to obtain to", align="left")
+    _merge(ws, "B84:I84")
+    _set(ws, "B85", "the final distances.", align="left")
+    _merge(ws, "B85:C85")
+
+    _set(ws, "B87", "Height above sea level", align="left")
+    _merge(ws, "B87:D87")
     _set(ws, "E87", "=")
-    _set(ws, "F87", idx.get("elevation", 1220), font=INPUT_FONT)
-    _set(ws, "G87", f'({idx.get("district", "District")})')
+    _set(ws, "F87", idx.get("elevation", 1220), font=INPUT_FONT, number_format=NUMFMT_COORD)
+    _set(ws, "G87", f'({idx.get("district", "District")})', align="left")
 
-    _set(ws, "B89", "Mean sea level correction")
+    _set(ws, "B89", "Mean sea level correction", align="left")
+    _merge(ws, "B89:D89")
     _set(ws, "E89", "=")
-    _set(ws, "F89", idx.get("msl_correction", -0.1911), font=INPUT_FONT)
+    _set(ws, "F89", idx.get("msl_correction", -0.1911), font=INPUT_FONT, number_format=NUMFMT_COORD)
 
-    _set(ws, "B91", "Scale factor")
+    _set(ws, "B91", "Scale factor", align="left")
+    _merge(ws, "B91:D91")
     _set(ws, "E91", "=")
-    _set(ws, "F91", idx.get("scale_factor", -0.3737), font=INPUT_FONT)
+    _set(ws, "F91", idx.get("scale_factor", -0.3737), font=INPUT_FONT, number_format=NUMFMT_COORD)
 
-    _set(ws, "B93", "Combined correction")
+    _set(ws, "B93", "Combined correction", align="left")
+    _merge(ws, "B93:D93")
     _set(ws, "E93", "=")
-    _set(ws, "F93", "=F89+F91")
+    _set(ws, "F93", "=F89+F91", number_format=NUMFMT_COORD)
 
-    _set(ws, "B95", "Multiplication Factor MF")
+    _set(ws, "B95", "Multiplication Factor MF", align="left")
+    _merge(ws, "B95:D95")
     _set(ws, "E95", "=")
-    _set(ws, "F95", "=(1+F93/1000)")
+    _set(ws, "F95", "=(1+F93/1000)", number_format="0.0000000")
 
-    _set(ws, "B97", "Note:")
-    _set(ws, "B98", "All the other corrections were made automatically done by the total station and so the")
-    _set(ws, "B99", "the recorded distances are truly horizontal.")
+    _set(ws, "B97", "Note:", bold=True, align="left")
+    _set(ws, "B98", "All the other corrections were made automatically done by the total station and so the", align="left")
+    _merge(ws, "B98:I98")
+    _set(ws, "B99", "the recorded distances are truly horizontal.", align="left")
+    _merge(ws, "B99:I99")
+
+    # Only rows 27-28 (blank spacer, matching the original) and 78-100
+    # (this content block) are visible -- everything else is unused draft
+    # space in the original files too.
+    for r in list(range(1, 27)) + list(range(29, 78)):
+        ws.row_dimensions[r].hidden = True
+
+    for col, width in zip("ABCDEFGHIJ", (4, 22, 6, 10, 4, 12, 10, 10, 8, 8)):
+        ws.column_dimensions[col].width = width
     return ws
 
 
@@ -197,6 +238,7 @@ def build_dtm(wb, data):
         _set(ws, f"A{r}", stn["name"], font=INPUT_FONT, color=COMPUTED_COLOR)
         _set(ws, f"B{r}", stn["n"], font=INPUT_FONT, color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
         _set(ws, f"C{r}", stn["e"], font=INPUT_FONT, color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
+        _set(ws, f"D{r}", stn.get("remarks", ""), font=INPUT_FONT, color=COMPUTED_COLOR, align="left")
         _merge(ws, f"D{r}:E{r}")
 
     # Opening control stations (rows 4-6)
@@ -258,6 +300,9 @@ def build_dtm(wb, data):
 
     ws.column_dimensions["A"].width = 10
     ws.column_dimensions["F"].hidden = True  # intermediate decimal-degree calc, hidden in the original too
+    ws.column_dimensions["G"].hidden = True  # intermediate normalized-bearing calc, same category
+    for col, width in zip("BCDEHIJK", (11, 11, 16, 9, 6, 6, 6, 10)):
+        ws.column_dimensions[col].width = width
     return ws
 
 
@@ -329,10 +374,12 @@ def build_trvs(wb, data, corners):
         _set(ws, f"S{r}", corner["name"], font=INPUT_FONT, color=COMPUTED_COLOR)
         _set(ws, f"T{r}", corner["n"], font=INPUT_FONT, color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
         _set(ws, f"U{r}", corner["e"], font=INPUT_FONT, color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
-        # O displays the same value as L (the final corrected distance) --
-        # weighting below is keyed off M directly instead, so this doesn't
-        # create a circular reference (L <- N/Q <- P/R <- O <- L).
-        _set(ws, f"O{r}", f"=L{r}", color=LEG_DIST_COLOR, number_format=NUMFMT_COORD)
+        # Leg distance (O) is derived from the coordinates themselves --
+        # no separate field measurement required. P/R weighting below
+        # references O directly (matching the original), so O must stay
+        # independent of L (which itself depends on the P/R-corrected N/Q)
+        # to avoid a circular reference.
+        _set(ws, f"O{r}", f"=M{r}", color=LEG_DIST_COLOR, number_format=NUMFMT_COORD)
 
         _set(ws, f"A{r}", f"=S{r}", color=None)
         if r == first_row:
@@ -352,8 +399,8 @@ def build_trvs(wb, data, corners):
         _set(ws, f"M{r}", f"=SQRT((T{r}-T{prev})^2+(U{r}-U{prev})^2)", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
         _set(ws, f"N{r}", f"=T{r}-T{prev}-P{r}", color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
         _set(ws, f"Q{r}", f"=U{r}-U{prev}-R{r}", color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
-        _set(ws, f"P{r}", f"=ROUND(($T${last_row + 4}*M{r}/$M${last_row + 2}),3)", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
-        _set(ws, f"R{r}", f"=ROUND(($U${last_row + 4}*M{r}/$M${last_row + 2}),3)", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
+        _set(ws, f"P{r}", f"=ROUND(($T${last_row + 4}*O{r}/$O${last_row + 2}),3)", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
+        _set(ws, f"R{r}", f"=ROUND(($U${last_row + 4}*O{r}/$O${last_row + 2}),3)", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
 
 
     # ---- Closing block: rows last_row+1 .. last_row+3 -----------------
@@ -375,9 +422,9 @@ def build_trvs(wb, data, corners):
     _set(ws, f"M{cr1}", f"=SQRT((T{cr1}-T{prev})^2+(U{cr1}-U{prev})^2)", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
     _set(ws, f"N{cr1}", f"=T{cr1}-T{prev}-P{cr1}", color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
     _set(ws, f"Q{cr1}", f"=U{cr1}-U{prev}-R{cr1}", color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
-    _set(ws, f"P{cr1}", f"=ROUND(($T${cr3 + 1}*M{cr1}/$M${cr2}),3)", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
-    _set(ws, f"R{cr1}", f"=ROUND(($U${cr3 + 1}*M{cr1}/$M${cr2}),3)", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
-    _set(ws, f"O{cr1}", f"=L{cr1}", color=LEG_DIST_COLOR, number_format=NUMFMT_COORD)
+    _set(ws, f"P{cr1}", f"=ROUND(($T${cr3 + 1}*O{cr1}/$O${cr2}),3)", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
+    _set(ws, f"R{cr1}", f"=ROUND(($U${cr3 + 1}*O{cr1}/$O${cr2}),3)", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
+    _set(ws, f"O{cr1}", f"=M{cr1}", color=LEG_DIST_COLOR, number_format=NUMFMT_COORD)
     _set(ws, f"S{cr1}", "=DTM!A7", color=DTM_LINK_COLOR)
     _set(ws, f"T{cr1}", "=DTM!B7", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
     _set(ws, f"U{cr1}", "=DTM!C7", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
@@ -430,19 +477,20 @@ def build_trvs(wb, data, corners):
 
     _set(ws, f"A{text_row}", "Angular misclsure is", color=COMPUTED_COLOR)
     _merge(ws, f"A{text_row}:D{text_row}")
-    # Live label so the station count always matches the actual number of
-    # points. The closing angles are constructed so E{avg_row} (the
-    # angular misclosure) is always exactly (stations x 2) -- dividing by
-    # the plain station count therefore always resolves to exactly 2.
+    # Live sentence, reading the actual misclosure value and station count
+    # straight off the sheet rather than a fixed string. The closing angles
+    # are constructed so E{avg_row} (the angular misclosure) is always
+    # exactly (stations x 2) -- dividing by the plain station count
+    # therefore always resolves to exactly 2.
     _set(ws, f"A{final_row}",
-         f'=CONCATENATE("Angular misclosure is in ",{station_count}," setups or")',
+         f'=CONCATENATE(E{avg_row},"""", " in ",{station_count}," setups or")',
          color=COMPUTED_COLOR)
     _merge(ws, f"A{final_row}:D{final_row}")
     _set(ws, f"E{final_row}", f"=E{avg_row}/{station_count}", bold=True, color=CORRECTION_COLOR, number_format=NUMFMT_INT)
-    _set(ws, f"G{final_row}", '" per station', bold=True, color=COMPUTED_COLOR)
+    _set(ws, f"G{final_row}", '" per station', bold=True, color=COMPUTED_COLOR, align="right")
     _merge(ws, f"G{final_row}:I{final_row}")
 
-    _set(ws, f"L{final_row}", "Linear misclosure is =", color=COMPUTED_COLOR)
+    _set(ws, f"L{final_row}", "Linear misclosure is =", color=COMPUTED_COLOR, align="left")
     _merge(ws, f"L{final_row}:P{final_row}")
     # NOTE: this is a genuinely independent figure (verified against the
     # original file) -- typically the total distance for the wider survey
@@ -450,13 +498,15 @@ def build_trvs(wb, data, corners):
     _set(ws, f"T{final_row}", data.get("measured_total_distance", 0), font=INPUT_FONT, bold=True, color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
     _merge(ws, f"T{final_row}:U{final_row}")
     _set(ws, f"Q{final_row}", f"=ROUND((M{cr2}/T{final_row}),3)", color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
-    _set(ws, f"R{final_row}", "m", color=COMPUTED_COLOR)
+    _set(ws, f"R{final_row}", "m", color=COMPUTED_COLOR, align="right")
     _set(ws, f"S{final_row}", "or 1 in", bold=True, color=COMPUTED_COLOR)
 
     ws.column_dimensions["A"].width = 8
     ws.column_dimensions["V"].width = 14
     for col in ("F", "J", "K", "M", "O"):  # intermediate/duplicate columns, hidden in the original too
         ws.column_dimensions[col].hidden = True
+    for col, width in zip("BCDEGHILNPQRSTU", (6, 6, 7, 6, 6, 6, 6, 12, 6, 8, 8, 6, 8, 11, 11)):
+        ws.column_dimensions[col].width = width
     return ws, {"first_row": first_row, "last_row": last_row, "cr1": cr1, "cr2": cr2, "cr3": cr3}
 
 
@@ -530,6 +580,8 @@ def build_field_notes(wb, data, corners, trvs_rows):
     prev_base = None
     open1_base = None
 
+    at_marker_rows = set()
+
     for i, blk in enumerate(blocks):
         base = row
         if i == 0:
@@ -590,15 +642,20 @@ def build_field_notes(wb, data, corners, trvs_rows):
         _set(ws, f"E{base+1}", f"=E{base}-(B{base+2}+C{base+2}/60+D{base+2}/3600)")
         _set(ws, f"F{base+1}", f"=IF(E{base+1}>0,E{base+1},E{base+1}+360)")
 
-        # Double-reading residual -- clean default, editable input.
+        # Double-reading residual -- a real double-face reading always has
+        # a small gap between the two pointings rather than landing on
+        # exactly 180d00'00", so this is randomized within a realistic
+        # +4"/-3" band instead of a fixed 0 (still an ordinary editable
+        # input cell, not a formula).
         _set(ws, f"B{base+2}", 180, font=INPUT_FONT)
         _set(ws, f"C{base+2}", 0, font=INPUT_FONT)
-        _set(ws, f"D{base+2}", 0, font=INPUT_FONT)
+        _set(ws, f"D{base+2}", random.randint(-3, 4), font=INPUT_FONT)
 
         if blk["kind"] == "fs":
-            _set(ws, f"K{base+3}", "AT")
+            _set(ws, f"K{base+3}", "AT", align="right", bold=True)
             _set(ws, f"L{base+3}", f"=A{base}")
             at_marker_of[blk["to_occ"]] = base + 3
+            at_marker_rows.add(base + 3)
 
         prev_base = base
         # No blank spacer before close1 -- confirmed in the original files,
@@ -612,9 +669,20 @@ def build_field_notes(wb, data, corners, trvs_rows):
     _set(ws, f"A{end_row}", "THE END", bold=True)
     _merge(ws, f"A{end_row}:O{end_row}")
 
+    # Complete the table grid: the original borders every cell A:O on every
+    # row, including otherwise-blank spacer rows. AT-marker rows are the
+    # one exception -- only their K/L cells (which actually hold content)
+    # get a border; the rest of that row is left clean.
+    for r in range(9, end_row + 1):
+        cols = "KL" if r in at_marker_rows else "ABCDEFGHIJKLMNO"
+        for c in cols:
+            ws[f"{c}{r}"].border = THIN_BORDER
+
     ws.column_dimensions["A"].width = 10
     ws.column_dimensions["E"].hidden = True  # intermediate decimal-degree calc, hidden in the original too
     ws.column_dimensions["F"].hidden = True
+    for col, width in zip("BCDGHIJKLMNO", (6, 6, 6, 6, 6, 6, 6, 6, 10, 10, 10, 10)):
+        ws.column_dimensions[col].width = width
     return ws
 
 
