@@ -85,7 +85,6 @@ real-world example. Quick shape:
     "foresight1": {"name": "cm74", "n": 143569.35, "e": 361634.81},
     "foresight2": {"name": "cm79", "n": 143206.69, "e": 361650.79}
   },
-  "angle_corrections": {"row9": 0, "row10": 0, "row_close1": 22, "row_close2": 26},
   "measured_total_distance": 18782.419,
   "corners": [
     {"name": "cm51", "n": 143587.19, "e": 362847.18, "is_plot_corner": true},
@@ -106,6 +105,11 @@ real-world example. Quick shape:
 - `is_plot_corner` — tag any station (including `start` and `end`) that's
   an actual parcel boundary corner. Only tagged stations feed ABSTRACT and
   AREA.
+- **Angle corrections aren't an input at all.** The opening pair is fixed
+  at 0; the closing pair auto-computes so their average lands exactly on
+  `(2 × number of stations)` — the target misclosure observed consistently
+  across real jobs — split by a minimal ±2 offset. The resulting
+  per-station angular misclosure is always exactly `2`.
 - `measured_total_distance` — the one figure that genuinely can't be
   derived from this traverse's own coordinates (verified against the
   original file: it's roughly 2.4× this polygon's own perimeter, i.e. the
@@ -149,6 +153,21 @@ files' AREA sheet has a visible block of hardcoded coordinates for an
 unrelated plot — a stale leftover, not the intended design — so the
 generator keeps its own correct, job-specific, live-formula AREA sheet
 instead of copying that.
+
+## Second formatting correction pass
+
+TOC's rows 6–15 now merge `B:H` per row with left-aligned dot-leader text.
+INDEX hides rows 1–26 and 29–77 (only the blank spacer at 27–28 and the
+content block at 78–100 stay visible) with left-aligned paragraph text.
+DTM hides column `G` too (same category as `F`), fits column widths, and
+each control station now has an optional **Remarks** field. Field notes'
+double-reading residual is randomized within a realistic ±4″/-3″ band
+instead of a flat 0; the "AT" marker is right-aligned with a lighter
+per-cell border instead of a full-row one; and the table grid now covers
+every row, including blank spacers. TRVS's `P`/`R` corrections weight off
+column `O` again (safe — `O` mirrors `M`, not `L`, so no circular
+reference); the misclosure sentence is now fully dynamic instead of a
+static label; and alignment/column widths are fitted throughout.
 
 ## Formatting fidelity (latest correction pass)
 
