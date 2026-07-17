@@ -287,6 +287,8 @@ function stationField(idPrefix, label, defaultName, plotCorner){
       <input type="number" step="any" id="${idPrefix}_n" value="0">
       <label style="margin-top:8px">Easting</label>
       <input type="number" step="any" id="${idPrefix}_e" value="0">
+      <label style="margin-top:8px">Remarks <span style="text-transform:none;font-weight:400;color:var(--text-dim)">(optional)</span></label>
+      <input type="text" id="${idPrefix}_remarks" value="">
       ${plotCorner !== undefined ? `
       <div class="checkbox-row">
         <input type="checkbox" id="${idPrefix}_plot" ${plotCorner ? 'checked' : ''} onchange="drawPreview()">
@@ -480,14 +482,14 @@ function buildPayload(){
       scale_factor: +scaleFactor.value
     },
     opening: {
-      backsight1: { name: bs1_name.value, n: +bs1_n.value, e: +bs1_e.value },
-      backsight2: { name: bs2_name.value, n: +bs2_n.value, e: +bs2_e.value },
-      start: { name: start_name.value, n: +start_n.value, e: +start_e.value, is_plot_corner: start_plot.checked }
+      backsight1: { name: bs1_name.value, n: +bs1_n.value, e: +bs1_e.value, remarks: bs1_remarks.value },
+      backsight2: { name: bs2_name.value, n: +bs2_n.value, e: +bs2_e.value, remarks: bs2_remarks.value },
+      start: { name: start_name.value, n: +start_n.value, e: +start_e.value, is_plot_corner: start_plot.checked, remarks: start_remarks.value }
     },
     closing: {
-      end: { name: end_name.value, n: +end_n.value, e: +end_e.value, is_plot_corner: end_plot.checked },
-      foresight1: { name: fs1_name.value, n: +fs1_n.value, e: +fs1_e.value },
-      foresight2: { name: fs2_name.value, n: +fs2_n.value, e: +fs2_e.value }
+      end: { name: end_name.value, n: +end_n.value, e: +end_e.value, is_plot_corner: end_plot.checked, remarks: end_remarks.value },
+      foresight1: { name: fs1_name.value, n: +fs1_n.value, e: +fs1_e.value, remarks: fs1_remarks.value },
+      foresight2: { name: fs2_name.value, n: +fs2_n.value, e: +fs2_e.value, remarks: fs2_remarks.value }
     },
     measured_total_distance: +measuredTotal.value,
     corners: collectCorners(),
