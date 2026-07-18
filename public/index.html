@@ -84,6 +84,12 @@
     color:var(--text);padding:9px 10px;border-radius:3px;
     font-family:'IBM Plex Mono',monospace;font-size:14px;
   }
+  select{
+    width:100%;background:var(--input-bg);border:1px solid var(--line);
+    color:var(--text);padding:9px 10px;border-radius:3px;
+    font-family:'Inter',sans-serif;font-size:14px;
+  }
+  select:focus{outline:2px solid var(--cyan);outline-offset:1px;border-color:var(--cyan);}
   input:focus{outline:2px solid var(--cyan);outline-offset:1px;border-color:var(--cyan);}
   .station-block{
     border:1px solid var(--line);border-radius:3px;padding:14px;
@@ -166,8 +172,14 @@
 
   <section>
     <h2>Distance correction (INDEX sheet) <span class="tag">optional</span></h2>
-    <p class="hint">Standard corrections applied to raw field distances to get the final horizontal distances. Defaults are a reasonable placeholder &mdash; edit to match your instrument and site.</p>
+    <p class="hint">Standard corrections applied to raw field distances to get the final horizontal distances. Pick a district/town to auto-fill elevation, MSL correction, and scale factor from the standard table &mdash; or just edit the fields directly.</p>
     <div class="grid3">
+      <div style="grid-column:span 3">
+        <label>District / Town <span style="text-transform:none;font-weight:400;color:var(--text-dim)">(auto-fills the three fields below &mdash; UTM values only)</span></label>
+        <select id="districtSelect" onchange="applyDistrictPreset()">
+          <option value="">-- Select to auto-fill --</option>
+        </select>
+      </div>
       <div><label>Instrument</label><input type="text" id="instrument" value="Total Station"></div>
       <div><label>District</label><input type="text" id="district" value="District"></div>
       <div><label>Elevation above sea level (m)</label><input type="number" step="any" id="elevation" value="1220"></div>
@@ -276,6 +288,156 @@ const API_URL = ""; // relative -- same-origin on Vercel (frontend + /api share 
 // Running the old standalone Flask dev server instead (`python api/index.py` on
 // port 5000) while opening this file directly? Set this to "http://localhost:5000".
 document.getElementById('apiUrlLabel').textContent = API_URL || window.location.origin;
+
+const DISTRICT_DATA = {
+  "ABOKE": {sf:-0.3843, height:1070, msl:-0.1673},
+  "ADJUMANI": {sf:-0.1777, height:760, msl:-0.1195},
+  "ADUKU": {sf:-0.3877, height:1040, msl:-0.1625},
+  "ALOI": {sf:-0.3952, height:1100, msl:-0.172},
+  "AMURIA": {sf:-0.3366, height:1130, msl:-0.1768},
+  "ARUA": {sf:0.2664, height:1220, msl:-0.1911},
+  "ATIAK": {sf:-0.2823, height:850, msl:-0.1338},
+  "ATURA": {sf:-0.332, height:1040, msl:-0.1625},
+  "BALAWOLI": {sf:-0.3985, height:1100, msl:-0.172},
+  "BOMBO": {sf:-0.3677, height:1160, msl:-0.1816},
+  "BUDADIRI": {sf:-0.1287, height:1220, msl:-0.1911},
+  "BUDAKA": {sf:-0.2608, height:1160, msl:-0.1816},
+  "BUDUDA": {sf:-0.1287, height:1370, msl:-0.215},
+  "BUGAYA": {sf:-0.3892, height:1070, msl:-0.1673},
+  "BUGIRI": {sf:-0.3126, height:1160, msl:-0.1816},
+  "BUGONDO": {sf:-0.1608, height:1070, msl:-0.1673},
+  "BUIKWE": {sf:-0.3998, height:1190, msl:-0.1864},
+  "BUKEDEA": {sf:-0.2305, height:1100, msl:-0.172},
+  "BULOPA": {sf:-0.3903, height:1100, msl:-0.172},
+  "BUNDIBUGYO": {sf:0.9238, height:950, msl:-0.1481},
+  "BUSEMBATIA": {sf:-0.3401, height:1100, msl:-0.172},
+  "BUSHENYI": {sf:0.8129, height:1620, msl:-0.2533},
+  "BUSIA": {sf:-0.2187, height:1160, msl:-0.1816},
+  "BUSIU": {sf:-0.1908, height:1160, msl:-0.1816},
+  "BUSOLWE": {sf:-0.2686, height:1070, msl:-0.1673},
+  "BUTALEJA": {sf:-0.2334, height:1070, msl:-0.1673},
+  "BUYENDE": {sf:-0.3963, height:1070, msl:-0.1673},
+  "BWIJANGA": {sf:-0.0929, height:1100, msl:-0.172},
+  "ENTEBBE": {sf:-0.3568, height:1160, msl:-0.1816},
+  "FORT PORTAL": {sf:0.7329, height:1520, msl:-0.2389},
+  "GAYAZA (ANKOLE)": {sf:0.3462, height:1340, msl:-0.2103},
+  "GULU": {sf:-0.3179, height:1070, msl:-0.1673},
+  "HOIMA": {sf:0.0124, height:1140, msl:-0.1792},
+  "IGANGA": {sf:-0.3652, height:1140, msl:-0.1792},
+  "JINJA": {sf:-0.3928, height:1190, msl:-0.1864},
+  "KABALE": {sf:0.9729, height:1860, msl:-0.2914},
+  "KABATORO": {sf:1.0693, height:910, msl:-0.1434},
+  "KABERAMAIDO": {sf:-0.3959, height:1070, msl:-0.1673},
+  "KABWOHE": {sf:0.6557, height:1460, msl:-0.2294},
+  "KACHUMBALA": {sf:-0.2187, height:1160, msl:-0.1816},
+  "KAFUNZO": {sf:0.6198, height:1370, msl:-0.215},
+  "KAGULU": {sf:-0.3856, height:1070, msl:-0.1673},
+  "KALAKI": {sf:-0.382, height:1100, msl:-0.1673},
+  "KALIRO": {sf:-0.1415, height:1070, msl:-0.1911},
+  "KALISIZO": {sf:-0.1082, height:1220, msl:-0.1911},
+  "KALORO": {sf:-0.2334, height:1100, msl:-0.172},
+  "KALUNGU": {sf:-0.1625, height:1220, msl:-0.1911},
+  "KAMPALA": {sf:-0.3737, height:1130, msl:-0.1768},
+  "KAMULI": {sf:-0.3975, height:1940, msl:-0.3033},
+  "KAPCHORWA": {sf:-0.0771, height:1070, msl:-0.1673},
+  "KAPIRI": {sf:-0.3041, height:980, msl:-0.1529},
+  "KASESE": {sf:0.9076, height:1100, msl:-0.172},
+  "KATAKWI": {sf:-0.2582, height:910, msl:-0.1434},
+  "KATUNGURU": {sf:0.934, height:1140, msl:-0.1792},
+  "KIBANGA PORT": {sf:-0.3974, height:1070, msl:-0.1673},
+  "KIDERA": {sf:-0.3999, height:1100, msl:-0.172},
+  "KIJUNJUBWA": {sf:-0.1676, height:1070, msl:-0.1673},
+  "KISORO": {sf:1.2795, height:1920, msl:-0.3009},
+  "KITGUM": {sf:-0.3978, height:910, msl:-0.1434},
+  "KITOBA": {sf:0.0269, height:1130, msl:-0.1768},
+  "KOTIDO": {sf:-0.3218, height:1370, msl:-0.215},
+  "KUMI": {sf:-0.266, height:1130, msl:-0.1768},
+  "KYENJOJO": {sf:0.4531, height:1370, msl:-0.215},
+  "KYERE": {sf:-0.346, height:1130, msl:-0.0956},
+  "LAROPI": {sf:-0.1875, height:610, msl:-0.172},
+  "LIRA": {sf:-0.3983, height:1100, msl:-0.172},
+  "LOYORO": {sf:-0.1521, height:1520, msl:-0.2389},
+  "LUGAZI": {sf:-0.3993, height:1220, msl:-0.1911},
+  "LUWERO": {sf:-0.3596, height:1100, msl:-0.172},
+  "LUZINGA": {sf:-0.3935, height:1070, msl:-0.1673},
+  "MAGORO": {sf:-0.2111, height:1070, msl:-0.1673},
+  "MAJANJI PORT": {sf:-0.2502, height:1140, msl:-0.1792},
+  "MALERA": {sf:-0.2319, height:1130, msl:-0.1768},
+  "MASAKA": {sf:-0.1556, height:1280, msl:-0.2007},
+  "MASINDI": {sf:-0.1486, height:1160, msl:-0.1816},
+  "MASINDI PORT": {sf:-0.2711, height:1040, msl:-0.1625},
+  "MAYENZE": {sf:-0.1591, height:1190, msl:-0.1864},
+  "MAZIMASA": {sf:-0.2305, height:1100, msl:-0.172},
+  "MBALE": {sf:-0.1843, height:1160, msl:-0.1816},
+  "MBARARA": {sf:0.4369, height:1430, msl:-0.2246},
+  "MBULAMUTI": {sf:-0.3997, height:1070, msl:-0.1673},
+  "MINAKULU": {sf:-0.341, height:980, msl:-0.1529},
+  "MITYANA": {sf:-0.2608, height:1220, msl:-0.1911},
+  "MOLO": {sf:-0.1892, height:1160, msl:-0.1816},
+  "MOROTO": {sf:0.0214, height:1370, msl:-0.215},
+  "MOYO": {sf:-0.1503, height:980, msl:-0.1529},
+  "MPIGI": {sf:-0.3313, height:1220, msl:-0.1911},
+  "MUBENDE": {sf:-0.0033, height:1310, msl:-0.2055},
+  "MUKONGORO": {sf:-0.2786, height:1100, msl:-0.172},
+  "MUKONO": {sf:-0.3906, height:1220, msl:-0.1911},
+  "MUNTEME": {sf:0.1409, height:1070, msl:-0.1673},
+  "MUNTU": {sf:-0.3963, height:1040, msl:-0.1625},
+  "NABOA": {sf:-0.2405, height:1130, msl:-0.1768},
+  "NAGALAMA": {sf:-0.392, height:1130, msl:-0.1768},
+  "NAGONGERA": {sf:-0.2363, height:1130, msl:-0.1768},
+  "NAIGOBYA": {sf:-0.3802, height:1070, msl:-0.1673},
+  "NAMASAGALI": {sf:-0.3995, height:1040, msl:-0.1625},
+  "NAMUTUMBA": {sf:-0.3285, height:1100, msl:-0.172},
+  "NAMWENDWA": {sf:-0.3899, height:1100, msl:-0.172},
+  "NAMWIWA": {sf:-0.3531, height:1100, msl:-0.172},
+  "NAWAIKOKE": {sf:-0.3737, height:1040, msl:-0.1625},
+  "NDOLWA": {sf:-0.3992, height:1040, msl:-0.1625},
+  "NGORA": {sf:-0.3041, height:1100, msl:-0.172},
+  "NJERU": {sf:-0.395, height:1220, msl:-0.1911},
+  "NTUNGAMO": {sf:0.7479, height:1400, msl:-0.2198},
+  "ORUNGO": {sf:-0.369, height:1160, msl:-0.1816},
+  "OTUBOI": {sf:-0.3856, height:1130, msl:-0.1768},
+  "PAJULE": {sf:-0.3993, height:1100, msl:-0.172},
+  "PAKWACH": {sf:-0.0505, height:610, msl:-0.0956},
+  "PALLISA": {sf:-0.3208, height:1100, msl:-0.172},
+  "PAROMBO": {sf:0.0952, height:1130, msl:-0.1768},
+  "PETETE": {sf:-0.2673, height:1130, msl:-0.1768},
+  "PORT BELL": {sf:-0.3811, height:1130, msl:-0.1768},
+  "RHINO CAMP": {sf:-0.0033, height:610, msl:-0.0956},
+  "RUKUNGIRI": {sf:1.0523, height:1650, msl:-0.2581},
+  "RWASHAMAIRE": {sf:0.8598, height:1650, msl:-0.2581},
+  "RWENTOBO": {sf:0.8207, height:1460, msl:-0.2294},
+  "SERERE": {sf:-0.369, height:1100, msl:-0.172},
+  "SIROKO": {sf:-0.1608, height:1130, msl:-0.1768},
+  "SOROTI": {sf:-0.3427, height:1130, msl:-0.1768},
+  "TORORO": {sf:-0.1859, height:1220, msl:-0.1625},
+  "VUKULA": {sf:-0.3443, height:1070, msl:-0.1911},
+  "WOBULENZI": {sf:-0.3658, height:1130, msl:-0.1673},
+  "YUMBE": {sf:0.0683, height:1040, msl:-0.1768}
+};
+
+function populateDistrictSelect(){
+  const sel = document.getElementById('districtSelect');
+  const names = Object.keys(DISTRICT_DATA).sort();
+  for(const name of names){
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    sel.appendChild(opt);
+  }
+}
+
+function applyDistrictPreset(){
+  const sel = document.getElementById('districtSelect');
+  const name = sel.value;
+  if(!name) return;
+  const d = DISTRICT_DATA[name];
+  document.getElementById('district').value = name;
+  document.getElementById('elevation').value = d.height;
+  document.getElementById('mslCorrection').value = d.msl;
+  document.getElementById('scaleFactor').value = d.sf;
+}
+
 
 function stationField(idPrefix, label, defaultName, plotCorner){
   return `
@@ -531,6 +693,7 @@ addCorner('cm51', 143587.19, 362847.18, true);
 addCorner('cm50', 142845.12, 362889.44, true);
 addCorner('cm49', 142521.76, 362878.44, true);
 drawPreview();
+populateDistrictSelect();
 ['bs1_n','bs1_e','bs2_n','bs2_e','start_n','start_e','fs1_n','fs1_e','fs2_n','fs2_e','end_n','end_e']
   .forEach(id=>document.getElementById(id).addEventListener('input', drawPreview));
 document.getElementById('start_plot').addEventListener('change', drawPreview);
