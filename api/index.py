@@ -269,9 +269,12 @@ def build_dtm(wb, data):
         _set(ws, f"E{r}", f"=C{from_r}-C{to_r}", color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
         _set(ws, f"F{r}", f"=ATAN2(D{r},E{r})*180/PI()", color=COMPUTED_COLOR)
         _set(ws, f"G{r}", f"=IF(F{r}<0,F{r}+360,F{r})", color=COMPUTED_COLOR)
-        _set(ws, f"H{r}", f"=TRUNC(G{r},0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
-        _set(ws, f"I{r}", f"=TRUNC((G{r}-H{r})*60,0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
-        _set(ws, f"J{r}", f"=ROUND((G{r}-H{r}-I{r}/60)*3600,0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+        # DMS conversion via total rounded seconds, so a rounding carry
+        # (e.g. 59.6" rounding up) properly rolls into minutes/degrees
+        # instead of ever showing an invalid 60" or -1" component.
+        _set(ws, f"H{r}", f"=INT(ROUND(G{r}*3600,0)/3600)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+        _set(ws, f"I{r}", f"=INT(MOD(ROUND(G{r}*3600,0),3600)/60)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+        _set(ws, f"J{r}", f"=MOD(ROUND(G{r}*3600,0),60)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
         _set(ws, f"K{r}", f"=SQRT(D{r}^2+E{r}^2)", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
         if headers:
             _set(ws, f"D{r-1}", "\u00b1\u0394N", bold=True)
@@ -339,9 +342,9 @@ def build_trvs(wb, data, corners):
     _set(ws, "G9", "=DTM!H13", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
     _set(ws, "H9", "=DTM!I13", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
     _set(ws, "I9", "=DTM!J13", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
-    _set(ws, "B9", "=TRUNC(F9,0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
-    _set(ws, "C9", "=TRUNC((F9-B9)*60,0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
-    _set(ws, "D9", "=ROUND((F9-B9-C9/60)*3600,0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, "B9", "=INT(ROUND(F9*3600,0)/3600)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, "C9", "=INT(MOD(ROUND(F9*3600,0),3600)/60)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, "D9", "=MOD(ROUND(F9*3600,0),60)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
     _set(ws, "S9", "=A9", color=DTM_LINK_COLOR)
 
     _set(ws, "A10", "=DTM!A15", color=DTM_LINK_COLOR)
@@ -350,9 +353,9 @@ def build_trvs(wb, data, corners):
     _set(ws, "G10", "=DTM!H16", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
     _set(ws, "H10", "=DTM!I16", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
     _set(ws, "I10", "=DTM!J16", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
-    _set(ws, "B10", "=TRUNC(F10,0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
-    _set(ws, "C10", "=TRUNC((F10-B10)*60,0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
-    _set(ws, "D10", "=ROUND((F10-B10-C10/60)*3600,0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, "B10", "=INT(ROUND(F10*3600,0)/3600)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, "C10", "=INT(MOD(ROUND(F10*3600,0),3600)/60)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, "D10", "=MOD(ROUND(F10*3600,0),60)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
     _set(ws, "S10", "=A10", color=DTM_LINK_COLOR)
 
     _set(ws, "A11", "=S11", color=DTM_LINK_COLOR)
@@ -389,12 +392,12 @@ def build_trvs(wb, data, corners):
         _set(ws, f"F{r}", f"=G{r}+H{r}/60+I{r}/3600-E{r}/3600", color=COMPUTED_COLOR)
         _set(ws, f"J{r}", f"=IF(K{r}<0,K{r}+360,K{r})", color=COMPUTED_COLOR)
         _set(ws, f"K{r}", f"=ATAN2(N{r},Q{r})/PI()*180", color=COMPUTED_COLOR)
-        _set(ws, f"G{r}", f"=TRUNC(J{r},0)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
-        _set(ws, f"H{r}", f"=TRUNC((J{r}-G{r})*60,0)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
-        _set(ws, f"I{r}", f"=ROUND(((J{r}-G{r})-H{r}/60)*3600,0)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
-        _set(ws, f"B{r}", f"=TRUNC(F{r},0)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
-        _set(ws, f"C{r}", f"=TRUNC((F{r}-B{r})*60,0)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
-        _set(ws, f"D{r}", f"=ROUND((F{r}-B{r}-C{r}/60)*3600,0)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
+        _set(ws, f"G{r}", f"=INT(ROUND(J{r}*3600,0)/3600)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
+        _set(ws, f"H{r}", f"=INT(MOD(ROUND(J{r}*3600,0),3600)/60)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
+        _set(ws, f"I{r}", f"=MOD(ROUND(J{r}*3600,0),60)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
+        _set(ws, f"B{r}", f"=INT(ROUND(F{r}*3600,0)/3600)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
+        _set(ws, f"C{r}", f"=INT(MOD(ROUND(F{r}*3600,0),3600)/60)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
+        _set(ws, f"D{r}", f"=MOD(ROUND(F{r}*3600,0),60)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
         _set(ws, f"L{r}", f"=ROUND((SQRT(N{r}^2+Q{r}^2)),5)", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
         _set(ws, f"M{r}", f"=SQRT((T{r}-T{prev})^2+(U{r}-U{prev})^2)", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
         _set(ws, f"N{r}", f"=T{r}-T{prev}-P{r}", color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
@@ -412,12 +415,12 @@ def build_trvs(wb, data, corners):
     _set(ws, f"F{cr1}", f"=G{cr1}+H{cr1}/60+I{cr1}/3600-E{cr1}/3600", color=COMPUTED_COLOR)
     _set(ws, f"J{cr1}", f"=IF(K{cr1}<0,K{cr1}+360,K{cr1})", color=COMPUTED_COLOR)
     _set(ws, f"K{cr1}", f"=ATAN2(N{cr1},Q{cr1})/PI()*180", color=COMPUTED_COLOR)
-    _set(ws, f"G{cr1}", f"=TRUNC(J{cr1},0)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
-    _set(ws, f"H{cr1}", f"=TRUNC((J{cr1}-G{cr1})*60,0)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
-    _set(ws, f"I{cr1}", f"=ROUND(((J{cr1}-G{cr1})-H{cr1}/60)*3600,0)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
-    _set(ws, f"B{cr1}", f"=TRUNC(F{cr1},0)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
-    _set(ws, f"C{cr1}", f"=TRUNC((F{cr1}-B{cr1})*60,0)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
-    _set(ws, f"D{cr1}", f"=ROUND((F{cr1}-B{cr1}-C{cr1}/60)*3600,0)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"G{cr1}", f"=INT(ROUND(J{cr1}*3600,0)/3600)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"H{cr1}", f"=INT(MOD(ROUND(J{cr1}*3600,0),3600)/60)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"I{cr1}", f"=MOD(ROUND(J{cr1}*3600,0),60)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"B{cr1}", f"=INT(ROUND(F{cr1}*3600,0)/3600)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"C{cr1}", f"=INT(MOD(ROUND(F{cr1}*3600,0),3600)/60)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"D{cr1}", f"=MOD(ROUND(F{cr1}*3600,0),60)", color=COMPUTED_COLOR, number_format=NUMFMT_INT)
     _set(ws, f"L{cr1}", f"=ROUND((SQRT(N{cr1}^2+Q{cr1}^2)),5)", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
     _set(ws, f"M{cr1}", f"=SQRT((T{cr1}-T{prev})^2+(U{cr1}-U{prev})^2)", color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
     _set(ws, f"N{cr1}", f"=T{cr1}-T{prev}-P{cr1}", color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
@@ -442,9 +445,9 @@ def build_trvs(wb, data, corners):
     _set(ws, f"G{cr2}", "=DTM!H21", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
     _set(ws, f"H{cr2}", "=DTM!I21", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
     _set(ws, f"I{cr2}", "=DTM!J21", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
-    _set(ws, f"B{cr2}", f"=TRUNC(F{cr2},0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
-    _set(ws, f"C{cr2}", f"=TRUNC((F{cr2}-B{cr2})*60,0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
-    _set(ws, f"D{cr2}", f"=ROUND((F{cr2}-B{cr2}-C{cr2}/60)*3600,0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"B{cr2}", f"=INT(ROUND(F{cr2}*3600,0)/3600)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"C{cr2}", f"=INT(MOD(ROUND(F{cr2}*3600,0),3600)/60)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"D{cr2}", f"=MOD(ROUND(F{cr2}*3600,0),60)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
     _set(ws, f"L{cr2}", f"=SUM(L{first_row}:L{cr1})", bold=True, color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
     _set(ws, f"M{cr2}", f"=SUM(M{first_row}:M{cr1})", bold=True, color=DTM_LINK_COLOR, number_format=NUMFMT_COORD)
     _set(ws, f"N{cr2}", f"=SUM(N{first_row}:N{cr1})", bold=True, color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
@@ -462,9 +465,9 @@ def build_trvs(wb, data, corners):
     _set(ws, f"G{cr3}", "=DTM!H24", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
     _set(ws, f"H{cr3}", "=DTM!I24", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
     _set(ws, f"I{cr3}", "=DTM!J24", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
-    _set(ws, f"B{cr3}", f"=TRUNC(F{cr3},0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
-    _set(ws, f"C{cr3}", f"=TRUNC((F{cr3}-B{cr3})*60,0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
-    _set(ws, f"D{cr3}", f"=ROUND((F{cr3}-B{cr3}-C{cr3}/60)*3600,0)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"B{cr3}", f"=INT(ROUND(F{cr3}*3600,0)/3600)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"C{cr3}", f"=INT(MOD(ROUND(F{cr3}*3600,0),3600)/60)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
+    _set(ws, f"D{cr3}", f"=MOD(ROUND(F{cr3}*3600,0),60)", color=DTM_LINK_COLOR, number_format=NUMFMT_INT)
     _set(ws, f"S{cr3}", f"=A{cr3}", color=DTM_LINK_COLOR)
     _set(ws, f"T{cr3}", f"=N{cr2}", color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
     _set(ws, f"U{cr3}", f"=Q{cr2}", color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
@@ -486,20 +489,20 @@ def build_trvs(wb, data, corners):
          f'=CONCATENATE(E{avg_row},"""", " in ",{station_count}," setups or")',
          color=COMPUTED_COLOR)
     _merge(ws, f"A{final_row}:D{final_row}")
-    _set(ws, f"E{final_row}", f"=E{avg_row}/{station_count}", bold=True, color=CORRECTION_COLOR, number_format=NUMFMT_INT)
-    _set(ws, f"G{final_row}", '" per station', bold=True, color=COMPUTED_COLOR, align="right")
+    _set(ws, f"E{final_row}", f"=E{avg_row}/{station_count}", bold=True, color=CORRECTION_COLOR, number_format=NUMFMT_INT, align="right")
+    _set(ws, f"G{final_row}", '" per station', bold=True, color=COMPUTED_COLOR, align="left")
     _merge(ws, f"G{final_row}:I{final_row}")
 
-    _set(ws, f"L{final_row}", "Linear misclosure is =", color=COMPUTED_COLOR, align="left")
+    _set(ws, f"L{final_row}", "Linear misclosure is =", color=COMPUTED_COLOR, align="right")
     _merge(ws, f"L{final_row}:P{final_row}")
     # NOTE: this is a genuinely independent figure (verified against the
     # original file) -- typically the total distance for the wider survey
     # job, not just this traverse's own perimeter -- so it stays an input.
-    _set(ws, f"T{final_row}", data.get("measured_total_distance", 0), font=INPUT_FONT, bold=True, color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
+    _set(ws, f"T{final_row}", data.get("measured_total_distance", 0), font=INPUT_FONT, bold=True, color=COMPUTED_COLOR, number_format=NUMFMT_COORD, align="left")
     _merge(ws, f"T{final_row}:U{final_row}")
-    _set(ws, f"Q{final_row}", f"=ROUND((M{cr2}/T{final_row}),3)", color=COMPUTED_COLOR, number_format=NUMFMT_COORD)
-    _set(ws, f"R{final_row}", "m", color=COMPUTED_COLOR, align="right")
-    _set(ws, f"S{final_row}", "or 1 in", bold=True, color=COMPUTED_COLOR)
+    _set(ws, f"Q{final_row}", f"=ROUND((M{cr2}/T{final_row}),3)", color=COMPUTED_COLOR, number_format=NUMFMT_COORD, align="right")
+    _set(ws, f"R{final_row}", "m", color=COMPUTED_COLOR, align="left")
+    _set(ws, f"S{final_row}", "or 1 in", bold=True, color=COMPUTED_COLOR, align="right")
 
     ws.column_dimensions["A"].width = 8
     ws.column_dimensions["V"].width = 14
@@ -631,14 +634,14 @@ def build_field_notes(wb, data, corners, trvs_rows):
         else:
             _set(ws, f"F{base}", f"=I{base}+J{base}/60+K{base}/3600-(H{base}+G{base})/3600")
 
-        _set(ws, f"B{base}", f"=TRUNC(F{base},0)")
-        _set(ws, f"C{base}", f"=TRUNC((F{base}-B{base})*60,0)")
-        _set(ws, f"D{base}", f"=ROUND(((F{base}-B{base})-C{base}/60)*3600,0)")
+        _set(ws, f"B{base}", f"=INT(ROUND(F{base}*3600,0)/3600)")
+        _set(ws, f"C{base}", f"=INT(MOD(ROUND(F{base}*3600,0),3600)/60)")
+        _set(ws, f"D{base}", f"=MOD(ROUND(F{base}*3600,0),60)")
         _set(ws, f"E{base}", f"=F{base}")
 
-        _set(ws, f"B{base+1}", f"=TRUNC(F{base+1},0)")
-        _set(ws, f"C{base+1}", f"=TRUNC((F{base+1}-B{base+1})*60,0)")
-        _set(ws, f"D{base+1}", f"=ROUND(((F{base+1}-B{base+1})-C{base+1}/60)*3600,0)")
+        _set(ws, f"B{base+1}", f"=INT(ROUND(F{base+1}*3600,0)/3600)")
+        _set(ws, f"C{base+1}", f"=INT(MOD(ROUND(F{base+1}*3600,0),3600)/60)")
+        _set(ws, f"D{base+1}", f"=MOD(ROUND(F{base+1}*3600,0),60)")
         _set(ws, f"E{base+1}", f"=E{base}-(B{base+2}+C{base+2}/60+D{base+2}/3600)")
         _set(ws, f"F{base+1}", f"=IF(E{base+1}>0,E{base+1},E{base+1}+360)")
 
@@ -646,10 +649,13 @@ def build_field_notes(wb, data, corners, trvs_rows):
         # a small gap between the two pointings rather than landing on
         # exactly 180d00'00", so this is randomized within a realistic
         # +4"/-3" band instead of a fixed 0 (still an ordinary editable
-        # input cell, not a formula).
-        _set(ws, f"B{base+2}", 180, font=INPUT_FONT)
-        _set(ws, f"C{base+2}", 0, font=INPUT_FONT)
-        _set(ws, f"D{base+2}", random.randint(-3, 4), font=INPUT_FONT)
+        # input cell, not a formula). The offset is applied in total
+        # seconds and re-normalized into D/M/S so a negative offset
+        # properly borrows a minute/degree (179d59'57", not 180d00'-3").
+        total_seconds = 180 * 3600 + random.randint(-3, 4)
+        _set(ws, f"B{base+2}", total_seconds // 3600, font=INPUT_FONT)
+        _set(ws, f"C{base+2}", (total_seconds % 3600) // 60, font=INPUT_FONT)
+        _set(ws, f"D{base+2}", total_seconds % 60, font=INPUT_FONT)
 
         if blk["kind"] == "fs":
             _set(ws, f"K{base+3}", "AT", align="right", bold=True)
